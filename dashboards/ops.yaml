@@ -1,0 +1,15 @@
+theme: ecstacy-dark
+refresh: 5s
+sources:
+  - id: metrics
+    kind: file
+    path: ./dashboards/sample.csv
+panels:
+  - source: metrics
+    viz: line
+    x: timestamp
+    y: [revenue, margin]
+  - source: metrics
+    viz: bar
+    category: region
+    value: revenue

@@ -1,0 +1,130 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from textual.app import App
+
+from ecstacy.config.loader import load_dashboard
+from ecstacy.config.schema import AppConfig, DashboardConfig
+from ecstacy.core.dataset import DataSet
+from ecstacy.core.store import Store
+from ecstacy.config.schema import ConfigError
+from ecstacy.screens.chart import ChartScreen
+from ecstacy.screens.dashboard import DashboardScreen
+from ecstacy.screens.home import HomeScreen
+from ecstacy.screens.splash import SplashScreen
+from ecstacy.sources.base import Source, SourceError, SourceSpec, create_source
+from ecstacy.theming import register_themes, theme_names
+from ecstacy.widgets.base import ColumnMapping
+
+_CSS_PATH = str(Path(__file__).parent / "theming" / "ecstacy.tcss")
+
+
+class EcstacyApp(App):
+    CSS_PATH = _CSS_PATH
+
+    def __init__(
+        self,
+        config: AppConfig,
+        open_spec: SourceSpec | None = None,
+        viz: str = "table",
+        mapping: ColumnMapping | None = None,
+        dashboard: DashboardConfig | None = None,
+        show_splash: bool = True,
+    ) -> None:
+        super().__init__()
+        self.config = config
+        self.store = Store()
+        self.recents: list[tuple[str, SourceSpec]] = []
+        self._open_spec = open_spec
+        self._viz = viz
+        self._mapping = mapping
+        self._dashboard = dashboard
+        self._show_splash = show_splash
+
+    def on_mount(self) -> None:
+        register_themes(self)
+        self.theme = self.config.theme if self.config.theme in self.available_themes else "ecstacy-dark"
+        self.push_screen(HomeScreen())
+        if self._open_spec is not None:
+            self.open_source(self._open_spec, self._viz, self._mapping)
+        elif self._dashboard is not None:
+            self.open_dashboard(self._dashboard)
+        elif self.config.splash and self._show_splash:
+            self.push_screen(SplashScreen())
+
+    def action_toggle_theme(self) -> None:
+        names = theme_names()
+        index = names.index(self.theme) if self.theme in names else -1
+        self.theme = names[(index + 1) % len(names)]
+        self.notify(f"theme: {self.theme}")
+
+    def open_path(self, text: str, viz: str = "table") -> None:
+        self.open_source(spec_from_target(text), viz)
+
+    def open_dashboard_path(self, path: str) -> None:
+        try:
+            dashboard = load_dashboard(path)
+        except ConfigError as error:
+            self.notify(f"cannot read dashboard: {error.message}", severity="error")
+            return
+        except Exception as error:
+            self.notify(f"cannot read dashboard: {error}", severity="error")
+            return
+        self.open_dashboard(dashboard)
+
+    def open_dashboard(self, dashboard: DashboardConfig) -> None:
+        if dashboard.theme and dashboard.theme in self.available_themes:
+            self.theme = dashboard.theme
+        if not dashboard.sources:
+            self.notify("dashboard has no sources", severity="warning")
+            return
+        self.push_screen(DashboardScreen(dashboard, self.store, self.config.max_rows))
+
+    def open_source(
+        self, spec: SourceSpec, viz: str = "table", mapping: ColumnMapping | None = None
+    ) -> None:
+        self.run_worker(
+            lambda: self._fetch_and_show(spec, viz, mapping),
+            thread=True,
+            exclusive=False,
+        )
+
+    def _fetch_and_show(
+        self, spec: SourceSpec, viz: str, mapping: ColumnMapping | None
+    ) -> None:
+        try:
+            source = create_source(spec)
+            dataset = source.fetch()
+        except SourceError as error:
+            self.call_from_thread(
+                self.notify, f"failed to load {error.source_id or spec.id}: {error.message}", severity="error"
+            )
+            return
+        except Exception as error:
+            self.call_from_thread(self.notify, f"failed to load: {error}", severity="error")
+            return
+        self.call_from_thread(self._show_dataset, spec, source, dataset, viz, mapping)
+
+    def _show_dataset(
+        self,
+        spec: SourceSpec,
+        source: Source,
+        dataset: DataSet,
+        viz: str,
+        mapping: ColumnMapping | None,
+    ) -> None:
+        self.store.set(spec.id, dataset)
+        self._remember(source.describe(), spec)
+        self.push_screen(ChartScreen(dataset, viz, mapping))
+
+    def _remember(self, label: str, spec: SourceSpec) -> None:
+        self.recents = [(label, spec)] + [r for r in self.recents if r[0] != label]
+
+
+def spec_from_target(text: str) -> SourceSpec:
+    target = text.strip()
+    if target.startswith("http://") or target.startswith("https://"):
+        return SourceSpec(kind="rest", id=target, params={"url": target})
+    path = Path(target).expanduser()
+    return SourceSpec(kind="file", id=path.name, params={"path": str(path)})

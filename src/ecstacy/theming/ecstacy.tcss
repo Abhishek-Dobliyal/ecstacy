@@ -1,0 +1,185 @@
+Screen {
+    background: $background;
+}
+
+Header {
+    background: $panel;
+    color: $primary;
+}
+
+Footer {
+    background: $panel;
+    color: $text-muted;
+}
+
+Footer > .footer--key {
+    color: $accent;
+    text-style: bold;
+}
+
+/* splash: screen aligns the inner block dead center */
+SplashScreen {
+    align: center middle;
+}
+
+#splash-inner {
+    width: auto;
+    height: auto;
+}
+
+#splash-inner > Center {
+    width: auto;
+    height: auto;
+    margin-bottom: 1;
+}
+
+#banner, #tagline, #progress, #stages, #version {
+    width: 64;
+    text-align: center;
+}
+
+#banner {
+    text-style: bold;
+}
+
+/* home grid */
+#home-grid {
+    layout: grid;
+    grid-size: 3 3;
+    grid-gutter: 1 1;
+    grid-columns: 1fr 1fr 1fr;
+    grid-rows: 1fr 1fr auto;
+    padding: 1 1;
+    height: 1fr;
+}
+
+#quick {
+    column-span: 1;
+    row-span: 1;
+}
+
+#sources {
+    column-span: 2;
+    row-span: 1;
+}
+
+#recents {
+    column-span: 2;
+    row-span: 1;
+}
+
+#charts {
+    column-span: 1;
+    row-span: 1;
+}
+
+#keys {
+    column-span: 3;
+    row-span: 1;
+    height: auto;
+}
+
+#quick, #sources, #recents, #charts, #keys {
+    border: round $primary;
+    border-title-color: $accent;
+    border-title-style: bold;
+    border-title-align: left;
+    border-subtitle-color: $text-muted;
+    border-subtitle-align: right;
+    padding: 0 1;
+    background: $surface;
+}
+
+#quick:focus-within, #sources:focus-within, #recents:focus-within, #charts:focus-within {
+    border: round $accent;
+}
+
+ListView {
+    background: transparent;
+}
+
+ListView > ListItem {
+    background: transparent;
+    padding: 0 1;
+}
+
+ListView > ListItem:hover {
+    background: $primary 15%;
+}
+
+ListView > ListItem.-highlight {
+    background: $primary 25%;
+    color: $foreground;
+}
+
+/* chart screen */
+#viz-holder {
+    border: round $primary;
+    border-title-color: $accent;
+    border-title-style: bold;
+    border-title-align: left;
+    border-subtitle-color: $text-muted;
+    border-subtitle-align: right;
+    padding: 0 1;
+    height: 1fr;
+}
+
+#viz-holder:focus-within {
+    border: round $accent;
+}
+
+/* dashboard screen */
+DashboardScreen #dashboard-holder {
+    height: 1fr;
+    padding: 0 1;
+}
+
+DashboardScreen #dashboard-grid {
+    height: 1fr;
+    grid-gutter: 1 1;
+}
+
+DashboardScreen #dashboard-holder > Container,
+DashboardScreen #dashboard-grid > Container {
+    height: 1fr;
+    border: round $primary;
+    padding: 0 1;
+}
+
+PlotextPlot {
+    padding: 0 1;
+    height: 1fr;
+}
+
+GaugeView {
+    border: round $secondary;
+    border-title-color: $accent;
+    padding: 1 2;
+    color: $primary;
+    height: 1fr;
+    content-align: center middle;
+}
+
+DataTable {
+    background: transparent;
+    height: 1fr;
+}
+
+DataTable > .datatable--header {
+    background: $panel;
+    color: $accent;
+    text-style: bold;
+}
+
+DataTable > .datatable--cursor {
+    background: $primary 30%;
+}
+
+Tree {
+    background: transparent;
+    height: 1fr;
+}
+
+Tree > .tree--cursor {
+    background: $primary 30%;
+}
