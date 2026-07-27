@@ -9,12 +9,12 @@ contract, and dashboards compose multiple panels from a single YAML file.
 
 <table>
 <tr>
-  <td align="center" width="50%"><b>Splash screen</b><br><br><img src="assets/splash.png" alt="Splash screen"></td>
-  <td align="center" width="50%"><b>Home screen</b><br><br><img src="assets/home.png" alt="Home screen"></td>
+  <td align="center" width="50%"><b>Splash screen</b><br><br><img src="https://raw.githubusercontent.com/Abhishek-Dobliyal/ecstacy/main/assets/splash.png" alt="Splash screen"></td>
+  <td align="center" width="50%"><b>Home screen</b><br><br><img src="https://raw.githubusercontent.com/Abhishek-Dobliyal/ecstacy/main/assets/home.png" alt="Home screen"></td>
 </tr>
 <tr>
-  <td align="center" width="50%"><b>Sparkline chart</b><br><br><img src="assets/sparkline.png" alt="Sparkline chart"></td>
-  <td align="center" width="50%"><b>JSON explorer</b><br><br><img src="assets/json.png" alt="JSON explorer"></td>
+  <td align="center" width="50%"><b>Sparkline chart</b><br><br><img src="https://raw.githubusercontent.com/Abhishek-Dobliyal/ecstacy/main/assets/sparkline.png" alt="Sparkline chart"></td>
+  <td align="center" width="50%"><b>JSON explorer</b><br><br><img src="https://raw.githubusercontent.com/Abhishek-Dobliyal/ecstacy/main/assets/json.png" alt="JSON explorer"></td>
 </tr>
 </table>
 
