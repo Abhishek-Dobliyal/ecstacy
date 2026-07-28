@@ -89,6 +89,24 @@ def test_file_source_auto_detects_format(sample_json):
     assert dataset.meta.rows == 4
 
 
+def test_file_source_json_limits_rows(sample_json):
+    spec = SourceSpec(
+        kind="file", id="sample", params={"path": str(sample_json), "max_rows": 2}
+    )
+    dataset = create_source(spec).fetch()
+    assert dataset.meta.rows == 2
+
+
+def test_file_source_log_limits_rows(tmp_path):
+    log_file = tmp_path / "test.log"
+    log_file.write_text("line1\nline2\nline3\nline4\nline5\n")
+    spec = SourceSpec(
+        kind="file", id="log", params={"path": str(log_file), "max_rows": 3}
+    )
+    dataset = create_source(spec).fetch()
+    assert dataset.meta.rows == 3
+
+
 def test_file_source_stdin_csv(monkeypatch):
     import io
 

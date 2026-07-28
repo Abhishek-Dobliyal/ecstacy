@@ -85,11 +85,11 @@ class FileSource(Source):
             elif self.fmt == "ndjson":
                 frame = pd.read_json(self.path, lines=True, nrows=self.max_rows)
             elif self.fmt == "json":
-                frame, raw = _read_json(self.path)
+                frame, raw = _read_json(self.path, self.max_rows)
             elif self.fmt == "excel":
                 frame = _read_excel(self.path, self.sheet, self.max_rows)
             else:
-                frame = _read_log(self.path)
+                frame = _read_log(self.path, self.max_rows)
         except pd.errors.EmptyDataError as exc:
             raise SourceError(f"empty file: {self.path}", source_id=self.id) from exc
         except Exception as exc:
@@ -151,17 +151,21 @@ def _read_parquet(path: Path, max_rows: int | None) -> pd.DataFrame:
     return frame
 
 
-def _read_json(path: Path) -> tuple[pd.DataFrame, Any]:
+def _read_json(path: Path, max_rows: int | None = None) -> tuple[pd.DataFrame, Any]:
     raw = orjson.loads(path.read_bytes())
     records = raw
     if isinstance(raw, dict):
         records = next((v for v in raw.values() if isinstance(v, list)), [raw])
     frame = pd.json_normalize(records)
+    if max_rows is not None:
+        frame = frame.head(max_rows)
     return frame, raw
 
 
-def _read_log(path: Path) -> pd.DataFrame:
+def _read_log(path: Path, max_rows: int | None = None) -> pd.DataFrame:
     lines = path.read_text(errors="replace").splitlines()
+    if max_rows is not None:
+        lines = lines[:max_rows]
     return pd.DataFrame({"line_no": range(1, len(lines) + 1), "line": lines})
 
 
