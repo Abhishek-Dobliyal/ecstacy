@@ -165,7 +165,7 @@ def file(
     path: str = typer.Argument(..., help="Path to csv/json/parquet/log or - for stdin"),
     chart: str = typer.Option("table", "--chart"),
     x: str | None = typer.Option(None, "--x"),
-    y: list[str] | None = typer.Option(None, "--y"),
+    y: list[str] | None = typer.Option(None, "--y"),  # noqa: B008
     category: str | None = typer.Option(None, "--category", help="Category column (bar)"),
     value: str | None = typer.Option(None, "--value", help="Value column (bar/histogram)"),
     fmt: str | None = typer.Option(None, "--format", help="Override file format"),

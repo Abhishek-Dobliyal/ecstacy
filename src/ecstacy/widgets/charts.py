@@ -134,7 +134,11 @@ class BarChart(PlotWidget):
         category = mapping.category or mapping.x
         value = mapping.y[0] if mapping.y else mapping.value
         if not category:
-            cats = [c for c in frame.columns if frame[c].dtype == "object" or str(frame[c].dtype).startswith("category")]
+            cats = [
+                c for c in frame.columns
+                if frame[c].dtype == "object"
+                or str(frame[c].dtype).startswith("category")
+            ]
             category = cats[0] if cats else None
         if not value:
             nums = _numeric_columns(frame)

@@ -46,9 +46,6 @@ def _start_ws_server(records: list[Any]) -> tuple[str, threading.Thread, Any]:
     port = server_holder["port"]
 
     def stop_server():
-        loop_for_stop = None
-        for t in [thread]:
-            pass
         # set stop via a fresh loop
         import asyncio as _a
 

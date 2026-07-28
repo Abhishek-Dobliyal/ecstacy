@@ -53,7 +53,10 @@ def test_rest_source_digs_json_path(monkeypatch):
 
 def test_rest_source_digs_array_index(monkeypatch):
     def mock_request(self, method, url, *, headers=None, params=None):
-        return Response(200, request=_request(), json={"data": {"items": [{"value": 1}, {"value": 2}]}})
+        return Response(
+            200, request=_request(),
+            json={"data": {"items": [{"value": 1}, {"value": 2}]}},
+        )
 
     monkeypatch.setattr("httpx.Client.request", mock_request)
     spec = SourceSpec(

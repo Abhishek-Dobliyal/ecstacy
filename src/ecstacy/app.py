@@ -43,7 +43,11 @@ class EcstacyApp(App):
 
     def on_mount(self) -> None:
         register_themes(self)
-        self.theme = self.config.theme if self.config.theme in self.available_themes else "ecstacy-dark"
+        self.theme = (
+            self.config.theme
+            if self.config.theme in self.available_themes
+            else "ecstacy-dark"
+        )
         self.push_screen(HomeScreen())
         if self._open_spec is not None:
             self.open_source(self._open_spec, self._viz, self._mapping)
@@ -97,7 +101,9 @@ class EcstacyApp(App):
             dataset = source.fetch()
         except SourceError as error:
             self.call_from_thread(
-                self.notify, f"failed to load {error.source_id or spec.id}: {error.message}", severity="error"
+                self.notify,
+                f"failed to load {error.source_id or spec.id}: {error.message}",
+                severity="error",
             )
             return
         except Exception as error:

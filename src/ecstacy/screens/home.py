@@ -134,8 +134,10 @@ class HomeScreen(Screen):
 
     def _keys_text(self) -> str:
         lines = [
-            "[bold yellow]NAV[/bold yellow]    tab / shift+tab move panel   arrows within   enter select   click also works",
-            "[bold yellow]HOME[/bold yellow]   o open   d dashboard   t theme   r refresh   ? help   q quit",
+            "[bold yellow]NAV[/bold yellow]    tab / shift+tab move panel   "
+            "arrows within   enter select   click also works",
+            "[bold yellow]HOME[/bold yellow]   o open   d dashboard   t theme   "
+            "r refresh   ? help   q quit",
             "[bold yellow]CHART[/bold yellow]  n / right next viz   p / left prev viz   esc back",
         ]
         return "\n".join(lines)
