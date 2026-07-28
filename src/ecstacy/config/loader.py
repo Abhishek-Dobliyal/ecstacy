@@ -18,6 +18,19 @@ def user_config_path() -> Path:
     return base / defaults.CONFIG_DIRNAME / defaults.CONFIG_FILENAME
 
 
+def ensure_user_config() -> Path:
+    """Create the user config directory and a default config file if missing.
+
+    Idempotent: never overwrites an existing config file. Returns the path.
+    """
+    path = user_config_path()
+    if path.exists():
+        return path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(yaml.safe_dump(defaults.DEFAULTS, sort_keys=False))
+    return path
+
+
 def _read_yaml(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
