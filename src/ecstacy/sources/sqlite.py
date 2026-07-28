@@ -26,17 +26,33 @@ class SqliteSource(Source):
         self.query = query
         self.db = db
         self.max_rows = max_rows
+        self._conn: sqlite3.Connection | None = None
 
     def describe(self) -> str:
         return f"sqlite:{self.db}"
 
+    def _get_connection(self) -> sqlite3.Connection:
+        if self.db == ":memory:":
+            if self._conn is None:
+                self._conn = sqlite3.connect(self.db)
+            return self._conn
+        return sqlite3.connect(self.db)
+
+    def close(self) -> None:
+        if self._conn is not None:
+            self._conn.close()
+            self._conn = None
+
     def fetch(self) -> DataSet:
+        conn: sqlite3.Connection | None = None
+        owns_connection = False
         try:
-            connection = sqlite3.connect(self.db)
-            try:
-                frame = pd.read_sql_query(self.query, connection)
-            finally:
-                connection.close()
+            if self.db == ":memory:":
+                conn = self._get_connection()
+            else:
+                conn = self._get_connection()
+                owns_connection = True
+            frame = pd.read_sql_query(self.query, conn)
         except sqlite3.Error as exc:
             raise SourceError(
                 f"SQLite query failed: {exc}", source_id=self.id
@@ -45,6 +61,9 @@ class SqliteSource(Source):
             raise SourceError(
                 f"SQLite read failed: {exc}", source_id=self.id
             ) from exc
+        finally:
+            if owns_connection and conn is not None:
+                conn.close()
         if self.max_rows is not None:
             frame = frame.head(self.max_rows)
         return DataSet.from_dataframe(frame, source_id=self.id, kind=self.kind)

@@ -70,3 +70,21 @@ def test_sqlite_source_in_memory():
     dataset = create_source(spec).fetch()
     assert dataset.meta.rows == 1
     assert "a" in dataset.frame.columns
+
+
+def test_sqlite_source_in_memory_persists_across_fetches():
+    source = create_source(
+        SourceSpec(
+            kind="sqlite",
+            id="sqlite",
+            params={"query": "SELECT 1", "db": ":memory:"},
+        )
+    )
+    conn = source._get_connection()
+    conn.executescript(
+        "CREATE TABLE temp_t(x INT); INSERT INTO temp_t VALUES (1), (2), (3);"
+    )
+    source.query = "SELECT * FROM temp_t"
+    dataset = source.fetch()
+    assert dataset.meta.rows == 3
+    source.close()
