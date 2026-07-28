@@ -113,3 +113,10 @@ def test_open_max_rows_applied():
     assert result.exit_code == 0
     lines = [ln for ln in result.stdout.strip().splitlines() if ln.strip()]
     assert len(lines) == 3
+
+
+def test_refresh_flag_accepted_headless():
+    result = runner.invoke(
+        app, ["file", str(_data_dir() / "sample.csv"), "--refresh", "5s", "--head", "2"]
+    )
+    assert result.exit_code == 0

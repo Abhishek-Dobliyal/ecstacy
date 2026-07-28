@@ -67,6 +67,10 @@ def _max_rows_option() -> typer.Option:
     return typer.Option(None, "--max-rows", help="Maximum rows to load from file/REST")
 
 
+def _refresh_option() -> typer.Option:
+    return typer.Option(None, "--refresh", help="Auto-refresh interval (e.g. 5s, 1m)")
+
+
 def _head_option() -> typer.Option:
     return typer.Option(None, "--head", help="Print first N rows to stdout and exit (headless)")
 
@@ -138,6 +142,7 @@ def open(  # noqa: A001 - intentional CLI verb
     chart: str = typer.Option("table", "--chart", help="Initial visualization"),
     theme: str | None = typer.Option(None, "--theme"),
     max_rows: int | None = _max_rows_option(),
+    refresh: str | None = _refresh_option(),
     head: int | None = _head_option(),
     tail: int | None = _tail_option(),
     export: str | None = _export_option(),
@@ -155,6 +160,7 @@ def open(  # noqa: A001 - intentional CLI verb
         open_spec=spec,
         viz=chart,
         theme=theme,
+        refresh=refresh,
         max_rows=max_rows,
         no_splash=no_splash,
     )
@@ -172,6 +178,7 @@ def file(
     sheet: str | None = typer.Option(None, "--sheet", help="Excel sheet name"),
     theme: str | None = typer.Option(None, "--theme"),
     max_rows: int | None = _max_rows_option(),
+    refresh: str | None = _refresh_option(),
     head: int | None = _head_option(),
     tail: int | None = _tail_option(),
     export: str | None = _export_option(),
@@ -198,6 +205,7 @@ def file(
         viz=chart,
         mapping=mapping,
         theme=theme,
+        refresh=refresh,
         max_rows=max_rows,
         no_splash=no_splash,
     )
@@ -211,6 +219,7 @@ def rest(
     chart: str = typer.Option("table", "--chart"),
     theme: str | None = typer.Option(None, "--theme"),
     max_rows: int | None = _max_rows_option(),
+    refresh: str | None = _refresh_option(),
     head: int | None = _head_option(),
     tail: int | None = _tail_option(),
     export: str | None = _export_option(),
@@ -227,6 +236,7 @@ def rest(
         open_spec=spec,
         viz=chart,
         theme=theme,
+        refresh=refresh,
         max_rows=max_rows,
         no_splash=no_splash,
     )
@@ -238,6 +248,7 @@ def sql(
     db: str = typer.Option(":memory:", "--db", help="DuckDB file or :memory:"),
     chart: str = typer.Option("table", "--chart"),
     theme: str | None = typer.Option(None, "--theme"),
+    refresh: str | None = _refresh_option(),
     head: int | None = _head_option(),
     tail: int | None = _tail_option(),
     export: str | None = _export_option(),
@@ -247,7 +258,7 @@ def sql(
     if _is_headless(head, tail, export):
         _run_headless(spec, head, tail, export)
         return
-    _launch(open_spec=spec, viz=chart, theme=theme, no_splash=no_splash)
+    _launch(open_spec=spec, viz=chart, theme=theme, refresh=refresh, no_splash=no_splash)
 
 
 @app.command()
@@ -257,6 +268,7 @@ def sqlite(
     chart: str = typer.Option("table", "--chart"),
     max_rows: int | None = _max_rows_option(),
     theme: str | None = typer.Option(None, "--theme"),
+    refresh: str | None = _refresh_option(),
     head: int | None = _head_option(),
     tail: int | None = _tail_option(),
     export: str | None = _export_option(),
@@ -271,7 +283,8 @@ def sqlite(
         _run_headless(spec, head, tail, export)
         return
     _launch(
-        open_spec=spec, viz=chart, theme=theme, max_rows=max_rows, no_splash=no_splash
+        open_spec=spec, viz=chart, theme=theme, refresh=refresh,
+        max_rows=max_rows, no_splash=no_splash,
     )
 
 
