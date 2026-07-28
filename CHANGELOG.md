@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-07-28
+
+### Fixed
+- Dashboard initial render race: panels now render only after data arrives
+  via the Scheduler's on_data callback, fixing the blank-first-render bug.
+- Dashboard refresh race: refresh ticks re-render after fetch completes,
+  not before.
+- `--max-rows` was ignored by the `open` command (now added to spec params).
+- `SourceSpec.from_dict` now raises a friendly `SourceSpecError` instead
+  of a raw `KeyError` when `kind` is missing.
+- Dashboard `ops.yaml` source path corrected (`./sample.csv`).
+- Table sort now covers all rows, not just the first `DEFAULT_MAX_ROWS`.
+- SQLite `:memory:` connection is now reused across fetches so tables
+  created in one query persist to the next.
+
+### Added
+- Full Transform support in dashboard panels: `where`, `group_by`, `select`,
+  and `limit` fields on `PanelConfig`, applied before rendering.
+- `SourceSpecError` exception class for invalid source specs.
+- Table search debounce (150ms) to reduce per-keystroke stringification.
+- Chart point cap: line and scatter charts limited to last 1000 points.
+- `max_rows` now applied at read time for JSON and log file formats.
+
+### Changed
+- Dashboard refresh uses the existing `Scheduler` abstraction instead of
+  duplicated `set_interval` + `run_worker` logic.
+
 ## [0.2.0] - 2026-07-28
 
 ### Added
