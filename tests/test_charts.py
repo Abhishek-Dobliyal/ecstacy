@@ -140,3 +140,38 @@ async def test_line_chart_caps_points_for_large_frame():
 def test_max_chart_points_constant():
     assert charts.MAX_CHART_POINTS == 1000
 
+
+@pytest.mark.asyncio
+async def test_chart_screen_refreshes_data(tmp_path):
+    from textual.app import App
+
+    from ecstacy.core.dataset import DataSet
+    from ecstacy.screens.chart import ChartScreen
+    from ecstacy.sources.base import SourceSpec
+
+    csv = tmp_path / "live.csv"
+    csv.write_text("a,b\n1,10\n2,20\n")
+
+    spec = SourceSpec(kind="file", id="live", params={"path": str(csv)})
+
+    class _App(App):
+        def on_mount(self):
+            import pandas as pd
+            df = pd.read_csv(csv)
+            ds = DataSet.from_dataframe(df, source_id="live", kind="file")
+            self.push_screen(ChartScreen(ds, "table", spec=spec, refresh=0.1))
+
+    app = _App()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen = app.screen
+        assert screen.refresh_interval == 0.1
+        assert screen._scheduler is not None
+
+        csv.write_text("a,b\n1,10\n2,20\n3,30\n4,40\n")
+        await app.workers.wait_for_complete()
+        for _ in range(10):
+            await pilot.pause()
+        assert screen.dataset.meta.rows == 4
+        screen._stop_refresh()
+
