@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-07-28
+
+### Added
+- Live refresh for single-source views: `--refresh 5s` on `file`, `open`,
+  `rest`, `sql`, and `sqlite` commands auto-refreshes the current chart in
+  place without remounting. Press `r` for manual refresh. The refresh
+  indicator (⟳ Ns) appears in the chart border.
+- Full test coverage for GaugeView, JsonTree, and Heatmap widgets.
+- Tests for Store pub/sub, error UI paths, and `--max-rows` in TUI mode.
+
+### Fixed
+- `_autoparse_dates` now samples the first 100 non-null values before
+  attempting a full-series parse, suppressing the pandas "Could not infer
+  format" UserWarning on non-date string columns.
+
+### Changed
+- ChartScreen now accepts `spec` and `refresh` params; uses the existing
+  `Scheduler` abstraction for live refresh (same as dashboards).
+- Border subtitle updated to show `r refresh` keybinding.
+
 ## [0.2.2] - 2026-07-28
 
 ### Changed

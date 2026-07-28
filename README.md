@@ -49,6 +49,15 @@ ecstacy file metrics.parquet --chart table --max-rows 1000
 ecstacy file sheet.xlsx --sheet data --chart table
 ```
 
+Auto-refresh a live source:
+
+```
+ecstacy file metrics.csv --refresh 5s --chart line
+ecstacy rest https://api.example.com/metrics --refresh 10s --chart table
+```
+
+Press `r` to manually refresh the current chart.
+
 Pipe data in from stdin:
 
 ```
@@ -123,7 +132,7 @@ gauge, heatmap (correlation matrix), json tree.
 ## Keys
 
 Home: `o` open, `d` dashboard, `t` theme, `?` help, `q` quit.
-Chart: `n`/`right` next chart, `p`/`left` previous chart, `t` theme, `esc` back.
+Chart: `n`/`right` next chart, `p`/`left` previous chart, `r` refresh, `t` theme, `esc` back.
 Table: `s` sort by column, `/` focus search, type to filter, `esc` clear.
 Dashboard: `m` toggle grid/single layout, `n`/`p` cycle panels, `esc` back.
 
@@ -199,7 +208,7 @@ with a `set_data(dataset, mapping)` method and decorating it with
 
 - Export is stdout-only (CSV/JSON/Markdown); no PNG/SVG yet.
 - No clipboard, Prometheus, InfluxDB, or Google Sheets source yet.
-- Live refresh applies to dashboards only (not single-source views).
+- WebSocket streaming UI not yet implemented (batch fetch only).
 
 ## License
 
