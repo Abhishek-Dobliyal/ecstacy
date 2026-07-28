@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import Any
 
 import pandas as pd
 
@@ -65,7 +66,7 @@ class SocketSource(Source):
                         raw = await asyncio.wait_for(
                             ws.recv(), timeout=self.timeout
                         )
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         if records:
                             yield DataSet.from_dataframe(
                                 _records_to_frame(records),
@@ -100,7 +101,7 @@ class SocketSource(Source):
             while len(records) < self.max_messages:
                 try:
                     raw = await asyncio.wait_for(ws.recv(), timeout=self.timeout)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     break
                 except websockets.ConnectionClosed:
                     break

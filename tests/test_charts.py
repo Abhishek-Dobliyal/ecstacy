@@ -56,7 +56,7 @@ def test_hex_rgb_returns_plotext_rgb_tuple():
 
 def test_hex_rgb_rejects_hex_string_for_plotext():
     """Sanity: confirm that raw hex strings are NOT accepted by plotext."""
-    from plotext._utility import is_string_color, is_rgb_color
+    from plotext._utility import is_rgb_color, is_string_color
 
     assert not is_string_color("#7cdf32")
     assert not is_rgb_color("#7cdf32")
@@ -66,6 +66,7 @@ def test_hex_rgb_rejects_hex_string_for_plotext():
 async def test_line_chart_renders_in_light_theme():
     from textual.app import App
     from textual.theme import Theme
+
     from ecstacy.core.dataset import DataSet
     from ecstacy.screens.chart import ChartScreen
 
@@ -101,6 +102,7 @@ async def test_line_chart_renders_in_light_theme():
 @pytest.mark.asyncio
 async def test_sparkline_renders_full_canvas():
     from textual.app import App
+
     from ecstacy.core.dataset import DataSet
     from ecstacy.screens.chart import ChartScreen
 
@@ -119,6 +121,7 @@ async def test_sparkline_renders_full_canvas():
 @pytest.mark.asyncio
 async def test_line_chart_caps_points_for_large_frame():
     from textual.app import App
+
     from ecstacy.core.dataset import DataSet
     from ecstacy.screens.chart import ChartScreen
 

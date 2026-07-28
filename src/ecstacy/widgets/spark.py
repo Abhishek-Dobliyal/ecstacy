@@ -3,7 +3,7 @@ from __future__ import annotations
 import pandas as pd
 
 from ecstacy.core import registry
-from ecstacy.widgets.base import ColumnMapping, PlotWidget, auto_mapping, numeric
+from ecstacy.widgets.base import ColumnMapping, PlotWidget, numeric
 from ecstacy.widgets.charts import _hex_rgb
 
 _MAX_POINTS = 500

@@ -10,7 +10,6 @@ from ecstacy.sources.base import SourceError, SourceSpec, create_source
 
 
 def _start_ws_server(records: list[Any]) -> tuple[str, threading.Thread, Any]:
-    import websockets
     from websockets.asyncio.server import serve
 
     stop = asyncio.Event()

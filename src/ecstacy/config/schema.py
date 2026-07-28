@@ -57,7 +57,7 @@ class PanelConfig(BaseModel):
     limit: int | None = None
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "PanelConfig":
+    def from_dict(cls, data: dict[str, Any]) -> PanelConfig:
         payload = dict(data)
         y = payload.get("y")
         if isinstance(y, str):
@@ -80,7 +80,7 @@ class DashboardConfig(BaseModel):
     panels: list[PanelConfig] = Field(default_factory=list)
 
     @model_validator(mode="after")
-    def validate_panel_sources(self) -> "DashboardConfig":
+    def validate_panel_sources(self) -> DashboardConfig:
         source_ids = {s.id for s in self.sources}
         for panel in self.panels:
             if panel.source not in source_ids:
@@ -90,7 +90,7 @@ class DashboardConfig(BaseModel):
         return self
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "DashboardConfig":
+    def from_dict(cls, data: dict[str, Any]) -> DashboardConfig:
         sources = [SourceSpec.from_dict(s) for s in data.get("sources", [])]
         panels = [PanelConfig.from_dict(p) for p in data.get("panels", [])]
         return cls(

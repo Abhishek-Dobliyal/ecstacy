@@ -12,7 +12,7 @@ class TransformError(EcstacyError):
     """Raised when a transform cannot be applied."""
 
 
-def _validate_transform_inputs(frame: pd.DataFrame, transform: "Transform") -> None:
+def _validate_transform_inputs(frame: pd.DataFrame, transform: Transform) -> None:
     if transform.limit is not None and transform.limit < 0:
         raise TransformError(f"limit must be non-negative, got {transform.limit}")
     if transform.where:

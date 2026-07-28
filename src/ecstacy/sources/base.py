@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -49,7 +50,7 @@ class SourceSpec(BaseModel):
     params: dict[str, Any] = Field(default_factory=dict)
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "SourceSpec":
+    def from_dict(cls, data: dict[str, Any]) -> SourceSpec:
         payload = dict(data)
         kind = payload.pop("kind", None)
         if kind is None:

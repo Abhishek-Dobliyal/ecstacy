@@ -5,10 +5,9 @@ from pathlib import Path
 from textual.app import App
 
 from ecstacy.config.loader import load_dashboard
-from ecstacy.config.schema import AppConfig, DashboardConfig
+from ecstacy.config.schema import AppConfig, ConfigError, DashboardConfig
 from ecstacy.core.dataset import DataSet
 from ecstacy.core.store import Store
-from ecstacy.config.schema import ConfigError
 from ecstacy.screens.chart import ChartScreen
 from ecstacy.screens.dashboard import DashboardScreen
 from ecstacy.screens.home import HomeScreen

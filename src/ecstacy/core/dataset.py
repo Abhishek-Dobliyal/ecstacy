@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import pandas as pd
@@ -48,7 +48,7 @@ class Meta:
     source_id: str
     kind: str
     rows: int = 0
-    fetched_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    fetched_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     status: str = "ok"
     detail: str = ""
     raw: Any = None
@@ -63,7 +63,7 @@ class DataSet:
     @classmethod
     def from_dataframe(
         cls, frame: pd.DataFrame, source_id: str, kind: str, raw: Any = None
-    ) -> "DataSet":
+    ) -> DataSet:
         schema = infer_schema(frame)
         meta = Meta(source_id=source_id, kind=kind, rows=len(frame), raw=raw)
         return cls(frame=frame, schema=schema, meta=meta)

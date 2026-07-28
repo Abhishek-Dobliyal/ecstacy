@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import pandas as pd
 import pytest
 
 from ecstacy.core.transforms import Transform, TransformError

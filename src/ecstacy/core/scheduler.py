@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 from ecstacy.core.dataset import DataSet
 from ecstacy.sources.base import Source
@@ -21,7 +22,7 @@ class Job:
 class Scheduler:
     def __init__(self, app) -> None:
         self._app = app
-        self._timers: list["Timer"] = []
+        self._timers: list[Timer] = []
 
     def add(self, job: Job) -> None:
         self._run_once(job)

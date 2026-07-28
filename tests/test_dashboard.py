@@ -136,9 +136,10 @@ def test_panel_config_from_dict_parses_transform_fields():
 
 def test_dashboard_applies_transform_in_prepare_panel(tmp_path):
     import pandas as pd
+
     from ecstacy.config.schema import DashboardConfig
-    from ecstacy.screens.dashboard import DashboardScreen
     from ecstacy.core.store import Store
+    from ecstacy.screens.dashboard import DashboardScreen
 
     csv = tmp_path / "data.csv"
     csv.write_text("region,value\nus,10\nus,20\neu,15\neu,5\n")
