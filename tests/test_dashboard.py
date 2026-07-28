@@ -163,3 +163,10 @@ def test_dashboard_applies_transform_in_prepare_panel(tmp_path):
     assert set(result["region"]) == {"us", "eu"}
     assert result[result["region"] == "us"]["value"].iloc[0] == 30
     assert result[result["region"] == "eu"]["value"].iloc[0] == 15
+
+
+def test_source_spec_from_dict_missing_kind():
+    from ecstacy.sources.base import SourceSpecError
+
+    with pytest.raises(SourceSpecError):
+        SourceSpec.from_dict({"id": "x"})

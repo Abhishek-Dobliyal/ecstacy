@@ -17,6 +17,10 @@ class SourceError(EcstacyError):
         self.source_id = source_id
 
 
+class SourceSpecError(EcstacyError):
+    """Raised when a SourceSpec cannot be constructed."""
+
+
 class Source(ABC):
     kind: str = "base"
     supports_stream: bool = False
@@ -47,7 +51,9 @@ class SourceSpec(BaseModel):
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "SourceSpec":
         payload = dict(data)
-        kind = payload.pop("kind")
+        kind = payload.pop("kind", None)
+        if kind is None:
+            raise SourceSpecError("source spec missing required 'kind' field")
         id = payload.pop("id", kind)
         return cls(kind=kind, id=id, params=payload)
 
