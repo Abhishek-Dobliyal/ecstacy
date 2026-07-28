@@ -4,6 +4,7 @@ import pytest
 
 from ecstacy.app import EcstacyApp
 from ecstacy.config.loader import load_app_config, load_dashboard
+from ecstacy.screens.chart import ChartScreen
 from ecstacy.screens.dashboard import DashboardScreen
 
 
@@ -18,6 +19,27 @@ async def test_app_opens_dashboard():
     async with app.run_test() as pilot:
         await pilot.pause()
         assert isinstance(app.screen, DashboardScreen)
+
+
+@pytest.mark.asyncio
+async def test_app_opens_source_with_refresh():
+    config = load_app_config({"refresh": "2s"})
+    app = EcstacyApp(
+        config,
+        open_spec=__import__(
+            "ecstacy.sources.base", fromlist=["SourceSpec"]
+        ).SourceSpec(
+            kind="file", id="sample.csv", params={"path": "tests/data/sample.csv"}
+        ),
+        show_splash=False,
+    )
+    async with app.run_test() as pilot:
+        await app.workers.wait_for_complete()
+        for _ in range(10):
+            await pilot.pause()
+        assert isinstance(app.screen, ChartScreen)
+        assert app.screen.refresh_interval == 2.0
+        app.screen._stop_refresh()
 
 
 @pytest.mark.asyncio

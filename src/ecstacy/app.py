@@ -14,6 +14,7 @@ from ecstacy.screens.home import HomeScreen
 from ecstacy.screens.splash import SplashScreen
 from ecstacy.sources.base import Source, SourceError, SourceSpec, create_source
 from ecstacy.theming import register_themes, theme_names
+from ecstacy.util.timeparse import parse_duration
 from ecstacy.widgets.base import ColumnMapping
 
 _CSS_PATH = str(Path(__file__).parent / "theming" / "ecstacy.tcss")
@@ -121,7 +122,20 @@ class EcstacyApp(App):
     ) -> None:
         self.store.set(spec.id, dataset)
         self._remember(source.describe(), spec)
-        self.push_screen(ChartScreen(dataset, viz, mapping))
+        refresh_seconds = 0.0
+        try:
+            refresh_seconds = parse_duration(self.config.refresh)
+        except Exception:
+            refresh_seconds = 0.0
+        self.push_screen(
+            ChartScreen(
+                dataset,
+                viz,
+                mapping,
+                spec=spec,
+                refresh=refresh_seconds,
+            )
+        )
 
     def _remember(self, label: str, spec: SourceSpec) -> None:
         self.recents = [(label, spec)] + [r for r in self.recents if r[0] != label]
