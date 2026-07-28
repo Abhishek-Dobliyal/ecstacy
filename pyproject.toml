@@ -1,6 +1,6 @@
 [project]
 name = "ecstacy-tui"
-version = "0.1.2"
+version = "0.2.0"
 description = "A Textual TUI for beautiful terminal data visualization from files, REST endpoints and more."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -54,6 +54,8 @@ dependencies = [
     "pyfiglet>=1.0.4,<2",
     "pydantic>=2.13.4,<3",
     "websockets>=16.1.1,<17",
+    "openpyxl>=3.1,<4",
+    "tabulate>=0.9,<1",
 ]
 
 [project.urls]

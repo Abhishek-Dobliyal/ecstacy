@@ -29,6 +29,11 @@ def sample_parquet() -> Path:
 
 
 @pytest.fixture
+def sample_xlsx() -> Path:
+    return DATA_DIR / "sample.xlsx"
+
+
+@pytest.fixture
 def empty_csv() -> Path:
     return DATA_DIR / "empty.csv"
 
