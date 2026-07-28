@@ -57,3 +57,14 @@ def test_filter_then_sort():
     filtered = filter_frame(_sample(), "us")
     result = sort_frame(filtered, "value", ascending=False)
     assert list(result["value"]) == [12.0, 10.0]
+
+
+def test_sort_frame_covers_all_rows_not_just_head():
+    rows = []
+    for i in range(2000):
+        rows.append({"region": "r" + str(i), "value": float(2000 - i)})
+    frame = pd.DataFrame(rows)
+    sorted_frame = sort_frame(frame, "value", ascending=True)
+    capped = sorted_frame.head(defaults.DEFAULT_MAX_ROWS)
+    assert capped.iloc[0]["value"] == 1.0
+    assert capped.iloc[-1]["value"] == float(defaults.DEFAULT_MAX_ROWS)

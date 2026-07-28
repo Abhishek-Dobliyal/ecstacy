@@ -39,6 +39,8 @@ class TableView(Vertical):
         self._sort_col: str | None = None
         self._sort_asc: bool = True
         self._pending_dataset: DataSet | None = None
+        self._search_timer = None
+        self._search_value = ""
 
     def compose(self) -> ComposeResult:
         yield Input(placeholder="/ to search  ·  type to filter rows", id="table-search")
@@ -73,7 +75,13 @@ class TableView(Vertical):
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id != "table-search":
             return
-        self._populate(event.value)
+        self._search_value = event.value
+        if self._search_timer is not None:
+            self._search_timer.stop()
+        self._search_timer = self.set_timer(0.15, self._populate_after_debounce)
+
+    def _populate_after_debounce(self) -> None:
+        self._populate(self._search_value)
 
     def on_data_table_column_selected(self, event: DataTable.ColumnSelected) -> None:
         if event.data_table.id != "table-data":
@@ -96,9 +104,9 @@ class TableView(Vertical):
             return
         columns = [str(c) for c in frame.columns]
         table.add_columns(*columns)
-        work = frame.head(defaults.DEFAULT_MAX_ROWS)
-        work = sort_frame(work, self._sort_col, self._sort_asc)
+        work = sort_frame(frame, self._sort_col, self._sort_asc)
         work = filter_frame(work, search)
+        work = work.head(defaults.DEFAULT_MAX_ROWS)
         rows = [
             [_fmt(value) for value in row]
             for row in work.itertuples(index=False, name=None)
