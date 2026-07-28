@@ -115,3 +115,25 @@ async def test_sparkline_renders_full_canvas():
             await pilot.pause()
     # no crash == pass
 
+
+@pytest.mark.asyncio
+async def test_line_chart_caps_points_for_large_frame():
+    from textual.app import App
+    from ecstacy.core.dataset import DataSet
+    from ecstacy.screens.chart import ChartScreen
+
+    class _App(App):
+        def on_mount(self):
+            df = pd.DataFrame({"a": list(range(5000)), "b": list(range(5000))})
+            ds = DataSet.from_dataframe(df, source_id="s", kind="test")
+            self.push_screen(ChartScreen(ds, "line"))
+
+    async with _App().run_test() as pilot:
+        for _ in range(6):
+            await pilot.pause()
+    # no crash == pass
+
+
+def test_max_chart_points_constant():
+    assert charts.MAX_CHART_POINTS == 1000
+

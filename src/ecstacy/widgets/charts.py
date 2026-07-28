@@ -6,6 +6,8 @@ from pandas.api import types as pdt
 from ecstacy.core import registry
 from ecstacy.widgets.base import ColumnMapping, PlotWidget, numeric
 
+MAX_CHART_POINTS = 1000
+
 
 def _numeric_columns(frame: pd.DataFrame) -> list[str]:
     return [str(c) for c in frame.select_dtypes("number").columns]
@@ -101,6 +103,10 @@ class LineChart(PlotWidget):
         xvals = _xvals(frame, mapping.x)
         palette = _theme_palette(self.app)
         work = _dropna_xy(frame, mapping.x, ycols)
+        if len(work) > MAX_CHART_POINTS:
+            work = work.tail(MAX_CHART_POINTS)
+            if xvals is not None:
+                xvals = xvals.tail(MAX_CHART_POINTS)
         for i, col in enumerate(ycols):
             color = _hex_rgb(palette[i % len(palette)])
             series = numeric(work[col]).dropna()
@@ -187,6 +193,8 @@ class Scatter(PlotWidget):
             plt.title("scatter needs two numeric columns")
             return
         work = _dropna_xy(frame, x, [y])
+        if len(work) > MAX_CHART_POINTS:
+            work = work.tail(MAX_CHART_POINTS)
         xvals = numeric(work[x]).dropna()
         yvals = numeric(work[y]).dropna()
         common = xvals.index.intersection(yvals.index)
