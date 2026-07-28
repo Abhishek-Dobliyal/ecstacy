@@ -3,7 +3,7 @@ refresh: 5s
 sources:
   - id: metrics
     kind: file
-    path: ./dashboards/sample.csv
+    path: ./sample.csv
 panels:
   - source: metrics
     viz: line
