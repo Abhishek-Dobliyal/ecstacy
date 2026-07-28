@@ -96,3 +96,70 @@ def test_source_spec_unknown_kind():
     spec = SourceSpec(kind="not-real", id="x", params={})
     with pytest.raises(SourceError):
         create_source(spec)
+
+
+def test_panel_config_accepts_transform_fields():
+    panel = PanelConfig(
+        source="metrics",
+        viz="bar",
+        category="region",
+        value="revenue",
+        where="revenue > 100",
+        group_by=["region"],
+        agg="mean",
+        select=["region", "revenue"],
+        limit=10,
+    )
+    assert panel.where == "revenue > 100"
+    assert panel.group_by == ["region"]
+    assert panel.agg == "mean"
+    assert panel.select == ["region", "revenue"]
+    assert panel.limit == 10
+
+
+def test_panel_config_from_dict_parses_transform_fields():
+    data = {
+        "source": "metrics",
+        "viz": "bar",
+        "category": "region",
+        "value": "revenue",
+        "where": "revenue > 100",
+        "group_by": "region",
+        "agg": "mean",
+        "select": "region, revenue",
+        "limit": 10,
+    }
+    panel = PanelConfig.from_dict(data)
+    assert panel.group_by == ["region"]
+    assert panel.select == ["region, revenue"]
+
+
+def test_dashboard_applies_transform_in_prepare_panel(tmp_path):
+    import pandas as pd
+    from ecstacy.config.schema import DashboardConfig
+    from ecstacy.screens.dashboard import DashboardScreen
+    from ecstacy.core.store import Store
+
+    csv = tmp_path / "data.csv"
+    csv.write_text("region,value\nus,10\nus,20\neu,15\neu,5\n")
+    dashboard = DashboardConfig(
+        sources=[SourceSpec(kind="file", id="metrics", params={"path": str(csv)})],
+        panels=[
+            PanelConfig(
+                source="metrics",
+                viz="table",
+                group_by=["region"],
+                agg="sum",
+                where="value > 5",
+            ),
+        ],
+    )
+    screen = DashboardScreen(dashboard, Store())
+    frame = pd.read_csv(csv)
+    screen._datasets["metrics"] = __import__(
+        "ecstacy.core.dataset", fromlist=["DataSet"]
+    ).DataSet.from_dataframe(frame, source_id="metrics", kind="file")
+    result = screen._apply_transform(screen.dashboard.panels[0], frame)
+    assert set(result["region"]) == {"us", "eu"}
+    assert result[result["region"] == "us"]["value"].iloc[0] == 30
+    assert result[result["region"] == "eu"]["value"].iloc[0] == 15

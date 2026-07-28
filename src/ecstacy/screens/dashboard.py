@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 from typing import Any
 
+import pandas as pd
 from textual.app import ComposeResult
 from textual.containers import Container, Grid
 from textual.screen import Screen
@@ -13,6 +14,7 @@ from ecstacy.config.schema import DashboardConfig, PanelConfig
 from ecstacy.core.dataset import DataSet
 from ecstacy.core.scheduler import Job, Scheduler
 from ecstacy.core.store import Store
+from ecstacy.core.transforms import Transform, TransformError
 from ecstacy.sources.base import Source, SourceError, SourceSpec, create_source
 from ecstacy.util.timeparse import parse_duration
 from ecstacy.widgets import create_viz
@@ -229,9 +231,37 @@ class DashboardScreen(Screen):
             widget: Widget = create_viz(panel.viz)
         except Exception as error:
             return container, Label(f"cannot create widget {panel.viz!r}: {error}")
+        try:
+            frame = self._apply_transform(panel, dataset.frame)
+        except TransformError as error:
+            return container, Label(f"transform error: {error.message}")
+        transformed = DataSet.from_dataframe(
+            frame,
+            source_id=dataset.meta.source_id,
+                    kind=dataset.meta.kind,
+        )
         mapping = _mapping_from_panel(panel)
-        widget.set_data(dataset, mapping)
+        widget.set_data(transformed, mapping)
         return container, widget
+
+    def _apply_transform(self, panel: PanelConfig, frame: pd.DataFrame) -> pd.DataFrame:
+        has_transform = (
+            panel.where
+            or panel.group_by
+            or panel.select
+            or panel.limit is not None
+            or panel.agg != "sum"
+        )
+        if not has_transform:
+            return frame
+        transform = Transform(
+            select=panel.select or None,
+            where=panel.where,
+            group_by=panel.group_by or None,
+            agg=panel.agg,
+            limit=panel.limit,
+        )
+        return transform.apply(frame)
 
     async def action_toggle_layout(self) -> None:
         self._multi_panel = not self._multi_panel

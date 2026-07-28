@@ -51,6 +51,10 @@ class PanelConfig(BaseModel):
     agg: str = "sum"
     bins: int = 20
     layout: dict[str, int] = Field(default_factory=dict)
+    where: str | None = None
+    group_by: list[str] = Field(default_factory=list)
+    select: list[str] = Field(default_factory=list)
+    limit: int | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "PanelConfig":
@@ -58,6 +62,12 @@ class PanelConfig(BaseModel):
         y = payload.get("y")
         if isinstance(y, str):
             payload["y"] = [y]
+        gb = payload.get("group_by")
+        if isinstance(gb, str):
+            payload["group_by"] = [gb]
+        sel = payload.get("select")
+        if isinstance(sel, str):
+            payload["select"] = [sel]
         return cls(**payload)
 
 
