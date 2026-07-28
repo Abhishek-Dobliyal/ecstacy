@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2026-07-28
+
+### Changed
+- Fixed all 34 ruff lint errors (import sorting, unused imports, quoted
+  annotations, deprecated typing imports, line length, dead code).
+  `ruff check .` now passes with 0 errors.
+
+### Added
+- GitHub Actions CI workflow running pytest + ruff on push and PR
+  against Python 3.11, 3.12, and 3.13.
+
 ## [0.2.1] - 2026-07-28
 
 ### Fixed
