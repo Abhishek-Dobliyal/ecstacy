@@ -177,6 +177,8 @@ def _read_excel(
 
 
 def _autoparse_dates(frame: pd.DataFrame) -> pd.DataFrame:
+    import warnings
+
     for name in frame.columns:
         series = frame[name]
         if pdt.is_numeric_dtype(series) or pdt.is_datetime64_any_dtype(series):
@@ -186,7 +188,14 @@ def _autoparse_dates(frame: pd.DataFrame) -> pd.DataFrame:
         sample = series.dropna().head(100)
         if sample.empty:
             continue
-        parsed = pd.to_datetime(series, errors="coerce")
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            sample_parsed = pd.to_datetime(sample, errors="coerce")
+        if sample_parsed.notna().mean() <= 0.8:
+            continue
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            parsed = pd.to_datetime(series, errors="coerce")
         if parsed.notna().mean() > 0.8:
             frame[name] = parsed
     return frame

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pandas as pd
 import pytest
 
 from ecstacy.sources.base import SourceError, SourceSpec, create_source
@@ -160,3 +161,34 @@ def test_file_source_stdin_unsupported_format(monkeypatch):
     )
     with pytest.raises(SourceError):
         create_source(spec).fetch()
+
+
+def test_autoparse_dates_skips_non_date_strings():
+    import warnings
+
+    from ecstacy.sources.file import _autoparse_dates
+
+    frame = pd.DataFrame(
+        {"date": ["2024-01-01", "2024-01-02"], "region": ["us", "eu"]}
+    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)
+        result = _autoparse_dates(frame)
+    assert result["date"].dtype.kind == "M"
+    assert result["region"].dtype == "string" or result["region"].dtype == "object"
+
+
+def test_autoparse_dates_parses_iso_dates():
+    from ecstacy.sources.file import _autoparse_dates
+
+    frame = pd.DataFrame({"ts": ["2024-01-01", "2024-01-02", "2024-01-03"]})
+    result = _autoparse_dates(frame)
+    assert result["ts"].dtype.kind == "M"
+
+
+def test_autoparse_dates_handles_empty_string_columns():
+    from ecstacy.sources.file import _autoparse_dates
+
+    frame = pd.DataFrame({"empty": ["", "", ""]})
+    result = _autoparse_dates(frame)
+    assert "empty" in result.columns
