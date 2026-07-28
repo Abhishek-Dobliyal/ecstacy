@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-07-28
+
+### Added
+- Stdin source: `ecstacy file -` (or pipe data in) reads CSV, TSV, JSON, NDJSON,
+  and log/text from standard input. Pair with `--format` to override the
+  inferred format.
+- Headless mode: `--head N` and `--tail N` print rows to stdout and exit
+  without launching the TUI. Available on `file`, `open`, `rest`, `sql`, and
+  `sqlite`.
+- Export: `--export {csv,json,markdown}` writes the dataset to stdout
+  (headless) and works with `--head`/`--tail`/`--max-rows`.
+- SQLite source via the new `sqlite` command (`ecstacy sqlite "SELECT ..."`
+  with `--db path`).
+- Excel (.xlsx, .xls) support in the file source via openpyxl, with an
+  optional `--sheet` flag.
+- User config directory and default `config.yaml` are now auto-created on
+  first run (idempotent, never overwrites an existing file).
+
+### Changed
+- Bumped to `tabulate` (for Markdown export) and `openpyxl` (for Excel) as
+  core dependencies.
+
+### Fixed
+- None.
+
 ## [0.1.2] - 2026-07-28
 
 ### Changed
