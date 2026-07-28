@@ -146,6 +146,8 @@ def open(  # noqa: A001 - intentional CLI verb
     from ecstacy.app import spec_from_target
 
     spec = spec_from_target(target)
+    if max_rows is not None:
+        spec.params["max_rows"] = max_rows
     if _is_headless(head, tail, export):
         _run_headless(spec, head, tail, export)
         return

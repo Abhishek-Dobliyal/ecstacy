@@ -104,3 +104,12 @@ def test_headless_export_invalid_format():
 def test_headless_missing_file_errors():
     result = runner.invoke(app, ["file", "/does/not/exist.csv", "--head", "2"])
     assert result.exit_code == 1
+
+
+def test_open_max_rows_applied():
+    result = runner.invoke(
+        app, ["open", str(_data_dir() / "sample.csv"), "--max-rows", "2", "--head", "10"]
+    )
+    assert result.exit_code == 0
+    lines = [ln for ln in result.stdout.strip().splitlines() if ln.strip()]
+    assert len(lines) == 3
