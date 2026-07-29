@@ -59,7 +59,9 @@ class SocketSource(Source):
         import websockets
 
         try:
-            async with websockets.connect(self.url) as ws:
+            async with websockets.connect(
+                self.url, open_timeout=self.timeout
+            ) as ws:
                 records: list[Any] = []
                 while True:
                     try:
@@ -97,7 +99,7 @@ class SocketSource(Source):
         import websockets
 
         records: list[Any] = []
-        async with websockets.connect(self.url) as ws:
+        async with websockets.connect(self.url, open_timeout=self.timeout) as ws:
             while len(records) < self.max_messages:
                 try:
                     raw = await asyncio.wait_for(ws.recv(), timeout=self.timeout)

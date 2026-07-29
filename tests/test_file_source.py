@@ -231,3 +231,19 @@ def test_file_source_parquet_limits_rows(sample_parquet):
     )
     dataset = create_source(spec).fetch()
     assert dataset.meta.rows == 2
+
+
+def test_file_source_unknown_format_raises(sample_csv):
+    spec = SourceSpec(
+        kind="file", id="sample", params={"path": str(sample_csv), "fmt": "csvv"}
+    )
+    with pytest.raises(SourceError, match="unknown format"):
+        create_source(spec).fetch()
+
+
+def test_file_source_xlsx_sheet_by_digit_string(sample_xlsx):
+    spec = SourceSpec(
+        kind="file", id="sample", params={"path": str(sample_xlsx), "sheet": "0"}
+    )
+    dataset = create_source(spec).fetch()
+    assert dataset.meta.rows == 4

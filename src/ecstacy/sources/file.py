@@ -50,7 +50,8 @@ class FileSource(Source):
             _READERS.get(self.path.suffix.lower(), "csv") if not self.is_stdin else "csv"
         )
         self.max_rows = max_rows
-        self.sheet = sheet
+        # "--sheet 0" means index 0, not a sheet literally named "0"
+        self.sheet = int(sheet) if isinstance(sheet, str) and sheet.isdigit() else sheet
         # which columns the first fetch identified as dates; refresh ticks
         # re-parse only these instead of re-sampling every string column
         self._date_columns: list[str] | None = None
@@ -94,10 +95,18 @@ class FileSource(Source):
                 frame, raw = _read_json(self.path, self.max_rows)
             elif self.fmt == "excel":
                 frame = _read_excel(self.path, self.sheet, self.max_rows)
-            else:
+            elif self.fmt == "log":
                 frame = _read_log(self.path, self.max_rows)
+            else:
+                raise SourceError(
+                    f"unknown format {self.fmt!r}; expected one of: "
+                    "csv, tsv, json, ndjson, parquet, excel, log",
+                    source_id=self.id,
+                )
         except pd.errors.EmptyDataError as exc:
             raise SourceError(f"empty file: {self.path}", source_id=self.id) from exc
+        except SourceError:
+            raise
         except Exception as exc:
             raise SourceError(
                 f"failed to read {self.path} as {self.fmt}: {exc}", source_id=self.id

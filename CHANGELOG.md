@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-07-29
+
+### Fixed
+- README downloads badge now uses the pepy.tech badge (the shields.io
+  PyPI badge was rate-limited upstream and showed a stale count).
+- An unknown `--format` (e.g. `--format csvv`) now raises a clear error
+  instead of silently reading the file as a log.
+- WebSocket connect now respects `--timeout` (previously only per-message
+  receives timed out).
+- `--sheet 0` is treated as sheet index 0, not a sheet named "0".
+
 ## [0.6.0] - 2026-07-29
 
 ### Added
