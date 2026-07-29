@@ -195,7 +195,6 @@ async def test_dashboard_updates_panels_in_place():
     from textual.app import App
 
     from ecstacy.config.schema import DashboardConfig, PanelConfig, SourceSpec
-    from ecstacy.core.store import Store
     from ecstacy.screens.dashboard import DashboardScreen
     from ecstacy.widgets.table import TableView
 
@@ -206,7 +205,7 @@ async def test_dashboard_updates_panels_in_place():
 
     class _App(App):
         def on_mount(self):
-            self.push_screen(DashboardScreen(dashboard, Store()))
+            self.push_screen(DashboardScreen(dashboard))
 
     app = _App()
     async with app.run_test() as pilot:
@@ -233,7 +232,6 @@ async def test_dashboard_render_leaves_focus_clear():
     from textual.app import App
 
     from ecstacy.config.schema import DashboardConfig, PanelConfig, SourceSpec
-    from ecstacy.core.store import Store
     from ecstacy.screens.dashboard import DashboardScreen
 
     dashboard = DashboardConfig(
@@ -243,7 +241,7 @@ async def test_dashboard_render_leaves_focus_clear():
 
     class _App(App):
         def on_mount(self):
-            self.push_screen(DashboardScreen(dashboard, Store()))
+            self.push_screen(DashboardScreen(dashboard))
 
     app = _App()
     async with app.run_test() as pilot:

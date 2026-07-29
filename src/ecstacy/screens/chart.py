@@ -108,7 +108,7 @@ class ChartScreen(Screen):
         if getattr(source, "supports_stream", False):
             self._start_stream(source)
             return
-        self._scheduler = Scheduler(self.app)
+        self._scheduler = Scheduler(self.app, is_active=lambda: self.app.screen is self)
         self._job = Job(
             source=source,
             interval=self.refresh_interval,
@@ -213,6 +213,7 @@ class ChartScreen(Screen):
                     frame,
                     source_id=self.dataset.meta.source_id,
                     kind=self.dataset.meta.kind,
+                    diet=False,
                 )
         self._transform_cache_key = key
         self._transform_cache = result

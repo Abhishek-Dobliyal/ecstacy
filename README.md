@@ -106,6 +106,7 @@ ecstacy file data.csv --head 20
 ecstacy file data.csv --tail 5 --export csv > out.csv
 ecstacy rest https://api.example.com/items --export json > out.json
 ecstacy file data.csv --export markdown > out.md
+ecstacy socket ws://localhost:8765 --head 20 --timeout 3
 ```
 
 Query a REST endpoint:
@@ -244,7 +245,6 @@ with a `set_data(dataset, mapping)` method and decorating it with
 
 - Export is stdout-only (CSV/JSON/Markdown); no PNG/SVG yet.
 - No clipboard, Prometheus, InfluxDB, or Google Sheets source yet.
-- WebSocket streaming UI not yet implemented (batch fetch only).
 
 ## License
 

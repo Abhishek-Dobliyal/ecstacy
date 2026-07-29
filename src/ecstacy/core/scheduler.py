@@ -29,8 +29,9 @@ class Scheduler:
     and slow sources don't pile up threads.
     """
 
-    def __init__(self, app) -> None:
+    def __init__(self, app, is_active: Callable[[], bool] | None = None) -> None:
         self._app = app
+        self._is_active = is_active
         self._timers: list[Timer] = []
         self._workers: list[Worker] = []
         self._stopped = False
@@ -43,8 +44,11 @@ class Scheduler:
             self._timers.append(timer)
 
     def run_now(self, job: Job) -> None:
-        """Fetch a job now, unless its previous fetch is still running."""
+        """Fetch a job now, unless its previous fetch is still running or the
+        owning screen isn't on top (e.g. a modal is open)."""
         if self._stopped or job.in_flight:
+            return
+        if self._is_active is not None and not self._is_active():
             return
         job.in_flight = True
         worker = self._app.run_worker(

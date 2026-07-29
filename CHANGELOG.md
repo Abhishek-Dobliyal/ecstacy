@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-07-29
+
+### Added
+- `socket` source supports headless `--head`, `--tail`, and `--export`
+  (csv/json/markdown), matching file/rest/sql/sqlite.
+- Dashboard YAML rejects unknown top-level fields (e.g. a `refreh:` typo)
+  with a `ConfigError` instead of silently dropping them.
+- Unknown source params (e.g. `max_row:` instead of `max_rows:`) are now
+  rejected with a `SourceError` at source creation, not silently swallowed.
+- Dtype diet: `DataSet.from_dataframe` downcasts integers (int64->int8/16/32),
+  floats (float64->float32), and low-cardinality strings to `category`,
+  cutting memory on loaded frames. Transform-derived frames opt out via
+  `diet=False` to preserve aggregate precision.
+- Benchmark harness: `pytest-benchmark` budgets for CSV load (<= 1.5x raw
+  `pd.read_csv`), 100k-row filter/transform, and 1M-point line downsample
+  (<= 50 ms). Gated behind `--run-bench` so normal `pytest` runs skip them.
+  `scripts/profile_load.py` reports peak RSS + cProfile hotspots per format.
+
+### Changed
+- Background refresh timers (dashboard + chart) pause while a modal screen
+  is on top, so fetches and widget rebuilds no longer run invisibly under
+  help/open/export modals.
+- A source fetch that completes after the user navigated away no longer
+  pushes a `ChartScreen` on top of wherever they are. The originating
+  screen is recorded at open time and checked before the push.
+
+### Removed
+- `ecstacy.core.store.Store` (write-only, read by nothing in production).
+  `EcstacyApp.store` and the `DashboardScreen` store parameter are gone.
+
 ## [0.6.1] - 2026-07-29
 
 ### Fixed

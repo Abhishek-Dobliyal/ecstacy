@@ -30,9 +30,8 @@ class SocketSource(Source):
         url: str,
         max_messages: int = 100,
         timeout: float = 5.0,
-        **params: Any,
     ) -> None:
-        super().__init__(id=id, url=url, **params)
+        super().__init__(id=id)
         self.url = url
         self.max_messages = max_messages
         self.timeout = timeout

@@ -120,3 +120,73 @@ def test_refresh_flag_accepted_headless():
         app, ["file", str(_data_dir() / "sample.csv"), "--refresh", "5s", "--head", "2"]
     )
     assert result.exit_code == 0
+
+
+def _start_ws_server(records):
+    import asyncio
+    import threading
+    from typing import Any
+
+    from websockets.asyncio.server import serve
+
+    stop = asyncio.Event()
+    server_holder: dict[str, Any] = {}
+
+    async def handler(websocket):
+        import orjson
+
+        for record in records:
+            await websocket.send(orjson.dumps(record))
+        await websocket.close()
+
+    async def _serve():
+        async with serve(handler, "127.0.0.1", 0) as server:
+            port = server.sockets[0].getsockname()[1]
+            server_holder["port"] = port
+            server_holder["ready"].set()
+            await stop.wait()
+
+    server_holder["ready"] = threading.Event()
+
+    def _run():
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(_serve())
+        finally:
+            loop.close()
+
+    threading.Thread(target=_run, daemon=True).start()
+    server_holder["ready"].wait(timeout=5)
+    return f"ws://127.0.0.1:{server_holder['port']}", stop
+
+
+def test_socket_headless_head():
+    records = [{"region": "us", "value": 1}, {"region": "eu", "value": 2}]
+    url, stop = _start_ws_server(records)
+    try:
+        result = runner.invoke(app, ["socket", url, "--head", "1", "--timeout", "3"])
+        assert result.exit_code == 0
+        assert "region" in result.stdout
+    finally:
+        stop.set()
+
+
+def test_socket_headless_export_json():
+    records = [{"region": "us", "value": 1}, {"region": "eu", "value": 2}]
+    url, stop = _start_ws_server(records)
+    try:
+        result = runner.invoke(app, ["socket", url, "--export", "json", "--timeout", "3"])
+        assert result.exit_code == 0
+        assert '"region":' in result.stdout
+    finally:
+        stop.set()
+
+
+def test_socket_headless_no_messages_errors():
+    url, stop = _start_ws_server([])
+    try:
+        result = runner.invoke(app, ["socket", url, "--head", "2", "--timeout", "1"])
+        assert result.exit_code == 1
+    finally:
+        stop.set()

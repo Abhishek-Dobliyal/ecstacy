@@ -7,7 +7,6 @@ from textual.app import App
 from ecstacy.config.loader import load_dashboard
 from ecstacy.config.schema import AppConfig, ConfigError, DashboardConfig
 from ecstacy.core.dataset import DataSet
-from ecstacy.core.store import Store
 from ecstacy.screens.chart import ChartScreen
 from ecstacy.screens.dashboard import DashboardScreen
 from ecstacy.screens.home import HomeScreen
@@ -34,14 +33,13 @@ class EcstacyApp(App):
     ) -> None:
         super().__init__()
         self.config = config
-        self.store = Store()
         self.recents: list[tuple[str, SourceSpec]] = []
         self._open_spec = open_spec
         self._viz = viz
         self._mapping = mapping
         self._dashboard = dashboard
         self._show_splash = show_splash
-        self._inflight_opens: set[tuple[str, str]] = set()
+        self._inflight_opens: dict[tuple[str, str], object] = {}
 
     def on_mount(self) -> None:
         register_themes(self)
@@ -84,7 +82,7 @@ class EcstacyApp(App):
         if not dashboard.sources:
             self.notify("dashboard has no sources", severity="warning")
             return
-        self.push_screen(DashboardScreen(dashboard, self.store, self.config.max_rows))
+        self.push_screen(DashboardScreen(dashboard, self.config.max_rows))
 
     def open_source(
         self, spec: SourceSpec, viz: str = "table", mapping: ColumnMapping | None = None
@@ -93,7 +91,7 @@ class EcstacyApp(App):
         if key in self._inflight_opens:
             self.notify(f"already loading {spec.id}")
             return
-        self._inflight_opens.add(key)
+        self._inflight_opens[key] = self.screen
         self.run_worker(
             lambda: self._fetch_and_show(spec, viz, mapping),
             thread=True,
@@ -127,7 +125,7 @@ class EcstacyApp(App):
             pass  # app is shutting down
 
     def _open_failed(self, key: tuple[str, str], message: str) -> None:
-        self._inflight_opens.discard(key)
+        self._inflight_opens.pop(key, None)
         self.notify(message, severity="error")
 
     def _show_dataset(
@@ -139,8 +137,11 @@ class EcstacyApp(App):
         viz: str,
         mapping: ColumnMapping | None,
     ) -> None:
-        self._inflight_opens.discard(key)
-        self.store.set(spec.id, dataset)
+        origin = self._inflight_opens.pop(key, None)
+        # If the user navigated away from the screen that initiated the open
+        # while the fetch ran, don't push a chart on top of wherever they are.
+        if origin is not None and self.screen is not origin:
+            return
         self._remember(source.describe(), spec)
         # AppConfig validates refresh at load time, so this always parses
         refresh_seconds = parse_duration(self.config.refresh)

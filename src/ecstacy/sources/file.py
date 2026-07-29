@@ -41,9 +41,8 @@ class FileSource(Source):
         fmt: str | None = None,
         max_rows: int | None = None,
         sheet: str | int | None = None,
-        **params: Any,
     ) -> None:
-        super().__init__(id=id, path=path, fmt=fmt, max_rows=max_rows, **params)
+        super().__init__(id=id)
         self.is_stdin = path == _STDIN_SENTINEL
         self.path = Path(path).expanduser() if not self.is_stdin else Path(path)
         self.fmt = fmt or (

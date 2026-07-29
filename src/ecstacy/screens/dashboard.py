@@ -12,7 +12,6 @@ from textual.widgets import Footer, Header, Label
 from ecstacy.config.schema import DashboardConfig, PanelConfig
 from ecstacy.core.dataset import DataSet
 from ecstacy.core.scheduler import Job, Scheduler
-from ecstacy.core.store import Store
 from ecstacy.core.transforms import Transform, TransformError
 from ecstacy.sources.base import Source, SourceError, SourceSpec, create_source
 from ecstacy.util.timeparse import parse_duration
@@ -80,11 +79,10 @@ class DashboardScreen(Screen):
     ]
 
     def __init__(
-        self, dashboard: DashboardConfig, store: Store, max_rows: int | None = None
+        self, dashboard: DashboardConfig, max_rows: int | None = None
     ) -> None:
         super().__init__()
         self.dashboard = dashboard
-        self.store = store
         self._max_rows = max_rows
         self._datasets: dict[str, DataSet] = {}
         self._sources: dict[str, Source] = {}
@@ -121,7 +119,7 @@ class DashboardScreen(Screen):
     def _start_scheduler(self) -> None:
         self._stop_scheduler()
         interval = self._parse_refresh_interval()
-        self._scheduler = Scheduler(self.app)
+        self._scheduler = Scheduler(self.app, is_active=lambda: self.app.screen is self)
         for spec in self.dashboard.sources:
             enriched = self._with_max_rows(spec)
             try:
@@ -156,7 +154,6 @@ class DashboardScreen(Screen):
             if not self.is_attached:
                 return
             self._datasets[source_id] = dataset
-            self.store.set(source_id, dataset)
             if not self._panels_built:
                 self._schedule_rebuild()
             else:
@@ -222,6 +219,7 @@ class DashboardScreen(Screen):
                         frame,
                         source_id=dataset.meta.source_id,
                         kind=dataset.meta.kind,
+                        diet=False,
                     )
                 except TransformError as error:
                     results.append((idx, error))
@@ -328,6 +326,7 @@ class DashboardScreen(Screen):
             frame,
             source_id=dataset.meta.source_id,
             kind=dataset.meta.kind,
+            diet=False,
         )
         mapping = _mapping_from_panel(panel)
         widget.set_data(transformed, mapping)

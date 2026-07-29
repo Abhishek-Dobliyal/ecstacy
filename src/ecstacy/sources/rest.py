@@ -24,9 +24,8 @@ class RestSource(Source):
         query: dict[str, Any] | None = None,
         timeout: float = 15.0,
         max_rows: int | None = None,
-        **params: Any,
     ) -> None:
-        super().__init__(id=id, url=url, **params)
+        super().__init__(id=id)
         self.url = url
         self.method = method.upper()
         self.json_path = json_path

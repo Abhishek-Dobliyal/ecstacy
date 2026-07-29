@@ -61,6 +61,33 @@ def test_panel_config_rejects_unknown_fields():
         PanelConfig(source="x", viz="line", unknown_field=123)
 
 
+def test_dashboard_config_rejects_unknown_top_level_fields():
+    with pytest.raises(ConfigError):
+        DashboardConfig.from_dict(
+            {"theme": "ecstacy-dark", "refreh": "5s", "sources": [], "panels": []}
+        )
+
+
+def test_create_source_rejects_unknown_params():
+    from ecstacy.sources.base import SourceError, create_source
+
+    spec = SourceSpec(
+        kind="file", id="x", params={"path": "a.csv", "bogus": 1}
+    )
+    with pytest.raises(SourceError):
+        create_source(spec)
+
+
+def test_create_source_rejects_unknown_params_rest():
+    from ecstacy.sources.base import SourceError, create_source
+
+    spec = SourceSpec(
+        kind="rest", id="x", params={"url": "http://x", "max_row": 5}
+    )
+    with pytest.raises(SourceError):
+        create_source(spec)
+
+
 def test_ensure_user_config_creates_dir_and_file(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     path = ensure_user_config()

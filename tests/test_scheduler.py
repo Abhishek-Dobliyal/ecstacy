@@ -92,3 +92,17 @@ def test_stop_cancels_workers_and_blocks_run_now():
     scheduler.stop()
     scheduler.run_now(_job())
     assert len(app.workers) == 1  # no new worker after stop
+
+
+def test_run_now_skips_when_is_active_returns_false():
+    app = _FakeApp()
+    scheduler = Scheduler(app, is_active=lambda: False)
+    scheduler.run_now(_job())
+    assert app.workers == []
+
+
+def test_run_now_runs_when_is_active_returns_true():
+    app = _FakeApp()
+    scheduler = Scheduler(app, is_active=lambda: True)
+    scheduler.run_now(_job())
+    assert len(app.workers) == 1

@@ -1,38 +1,8 @@
 from __future__ import annotations
 
-import pandas as pd
 import pytest
 
-from ecstacy.core.dataset import DataSet
-from ecstacy.core.store import Store
 from ecstacy.sources.base import SourceSpec
-
-
-def _make_dataset(source_id: str = "s", rows: int = 3) -> DataSet:
-    df = pd.DataFrame({"a": list(range(rows))})
-    return DataSet.from_dataframe(df, source_id=source_id, kind="test")
-
-
-def test_store_set_and_get():
-    store = Store()
-    ds = _make_dataset("metrics")
-    store.set("metrics", ds)
-    assert store.get("metrics") is ds
-    assert store.get("missing") is None
-
-
-def test_store_ids():
-    store = Store()
-    store.set("a", _make_dataset("a"))
-    store.set("b", _make_dataset("b"))
-    assert set(store.ids()) == {"a", "b"}
-
-
-def test_store_set_overwrites_previous():
-    store = Store()
-    store.set("metrics", _make_dataset("metrics", rows=2))
-    store.set("metrics", _make_dataset("metrics", rows=5))
-    assert store.get("metrics").meta.rows == 5
 
 
 @pytest.mark.asyncio

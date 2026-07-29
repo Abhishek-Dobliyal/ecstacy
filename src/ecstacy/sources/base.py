@@ -26,7 +26,7 @@ class Source(ABC):
     kind: str = "base"
     supports_stream: bool = False
 
-    def __init__(self, id: str, **params: Any) -> None:
+    def __init__(self, id: str) -> None:
         self.id = id
 
     @abstractmethod
@@ -66,4 +66,10 @@ def create_source(spec: SourceSpec) -> Source:
             source_id=spec.id,
         )
     factory = registry.sources.get(spec.kind)
-    return factory(id=spec.id, **spec.params)
+    try:
+        return factory(id=spec.id, **spec.params)
+    except TypeError as error:
+        raise SourceError(
+            f"invalid params for {spec.kind!r} source: {error}",
+            source_id=spec.id,
+        ) from error

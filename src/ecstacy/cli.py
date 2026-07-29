@@ -298,6 +298,9 @@ def socket(
     max_messages: int = typer.Option(100, "--max-messages", help="Max messages to collect"),
     timeout: float = typer.Option(5.0, "--timeout", help="Receive timeout in seconds"),
     theme: str | None = typer.Option(None, "--theme"),
+    head: int | None = _head_option(),
+    tail: int | None = _tail_option(),
+    export: str | None = _export_option(),
     no_splash: bool = typer.Option(True, "--no-splash/--splash"),
 ) -> None:
     spec = SourceSpec(
@@ -305,6 +308,9 @@ def socket(
         id=url,
         params={"url": url, "max_messages": max_messages, "timeout": timeout},
     )
+    if _is_headless(head, tail, export):
+        _run_headless(spec, head, tail, export)
+        return
     _launch(open_spec=spec, viz=chart, theme=theme, no_splash=no_splash)
 
 

@@ -60,12 +60,19 @@ class DataSet:
 
     @classmethod
     def from_dataframe(
-        cls, frame: pd.DataFrame, source_id: str, kind: str, raw: Any = None
+        cls,
+        frame: pd.DataFrame,
+        source_id: str,
+        kind: str,
+        raw: Any = None,
+        diet: bool = True,
     ) -> DataSet:
         # Duplicate column names break schema inference (frame[name] returns
         # a DataFrame, which has no .dtype); dedupe defensively for sources
         # that don't do it themselves (rest/sql/sqlite/socket).
         frame = deduplicate_columns(frame)
+        if diet:
+            frame = _diet_dtypes(frame)
         schema = infer_schema(frame)
         meta = Meta(source_id=source_id, kind=kind, rows=len(frame), raw=raw)
         return cls(frame=frame, schema=schema, meta=meta)
@@ -106,3 +113,37 @@ def _infer_role(series: pd.Series) -> Role:
     if pdt.is_numeric_dtype(series):
         return VALUE
     return CATEGORY
+
+
+def _diet_dtypes(frame: pd.DataFrame) -> pd.DataFrame:
+    """One-pass memory diet: downcast integers/floats to the narrowest width
+    and convert low-cardinality object columns to ``category``. Datetime and
+    bool columns are left alone. Returns the same frame when nothing changes.
+    """
+    if frame.empty:
+        return frame
+    changed = False
+    new_cols: dict[str, pd.Series] = {}
+    for name in frame.columns:
+        series = frame[name]
+        if pdt.is_datetime64_any_dtype(series) or pdt.is_bool_dtype(series):
+            continue
+        if pdt.is_integer_dtype(series):
+            downcasted = pd.to_numeric(series, downcast="integer")
+            if downcasted.dtype != series.dtype:
+                new_cols[name] = downcasted
+                changed = True
+        elif pdt.is_float_dtype(series):
+            downcasted = pd.to_numeric(series, downcast="float")
+            if downcasted.dtype != series.dtype:
+                new_cols[name] = downcasted
+                changed = True
+        elif pdt.is_object_dtype(series) or pdt.is_string_dtype(series):
+            # Skip the cheap "is it all missing" case to avoid surprises.
+            non_null = series.dropna()
+            if len(non_null) > 0 and non_null.nunique() / len(non_null) < 0.5:
+                new_cols[name] = series.astype("category")
+                changed = True
+    if not changed:
+        return frame
+    return frame.assign(**new_cols)

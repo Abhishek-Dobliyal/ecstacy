@@ -111,6 +111,12 @@ class DashboardConfig(BaseModel):
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> DashboardConfig:
+        known = {"theme", "refresh", "sources", "panels"}
+        extras = set(data) - known
+        if extras:
+            raise ConfigError(
+                f"unknown dashboard field(s): {', '.join(sorted(extras))}"
+            )
         sources = [SourceSpec.from_dict(s) for s in data.get("sources", [])]
         panels = [PanelConfig.from_dict(p) for p in data.get("panels", [])]
         return cls(

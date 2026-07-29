@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import sqlite3
 import threading
-from typing import Any
 
 import pandas as pd
 
@@ -21,9 +20,8 @@ class SqliteSource(Source):
         query: str,
         db: str = ":memory:",
         max_rows: int | None = None,
-        **params: Any,
     ) -> None:
-        super().__init__(id=id, query=query, db=db, **params)
+        super().__init__(id=id)
         self.query = query
         self.db = db
         self.max_rows = max_rows

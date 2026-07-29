@@ -138,7 +138,6 @@ def test_dashboard_applies_transform_in_prepare_panel(tmp_path):
     import pandas as pd
 
     from ecstacy.config.schema import DashboardConfig
-    from ecstacy.core.store import Store
     from ecstacy.screens.dashboard import DashboardScreen
 
     csv = tmp_path / "data.csv"
@@ -155,7 +154,7 @@ def test_dashboard_applies_transform_in_prepare_panel(tmp_path):
             ),
         ],
     )
-    screen = DashboardScreen(dashboard, Store())
+    screen = DashboardScreen(dashboard)
     frame = pd.read_csv(csv)
     screen._datasets["metrics"] = __import__(
         "ecstacy.core.dataset", fromlist=["DataSet"]

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Any
-
 import duckdb
 
 from ecstacy.core import registry
@@ -19,9 +17,8 @@ class SqlSource(Source):
         query: str,
         db: str = ":memory:",
         max_rows: int | None = None,
-        **params: Any,
     ) -> None:
-        super().__init__(id=id, query=query, db=db, **params)
+        super().__init__(id=id)
         self.query = query
         self.db = db
         self.max_rows = max_rows
