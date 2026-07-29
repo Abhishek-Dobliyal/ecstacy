@@ -41,6 +41,7 @@ class EcstacyApp(App):
         self._mapping = mapping
         self._dashboard = dashboard
         self._show_splash = show_splash
+        self._inflight_opens: set[tuple[str, str]] = set()
 
     def on_mount(self) -> None:
         register_themes(self)
@@ -88,38 +89,57 @@ class EcstacyApp(App):
     def open_source(
         self, spec: SourceSpec, viz: str = "table", mapping: ColumnMapping | None = None
     ) -> None:
+        key = (spec.kind, spec.id)
+        if key in self._inflight_opens:
+            self.notify(f"already loading {spec.id}")
+            return
+        self._inflight_opens.add(key)
         self.run_worker(
             lambda: self._fetch_and_show(spec, viz, mapping),
             thread=True,
             exclusive=False,
+            exit_on_error=False,
         )
 
     def _fetch_and_show(
         self, spec: SourceSpec, viz: str, mapping: ColumnMapping | None
     ) -> None:
+        key = (spec.kind, spec.id)
         try:
             source = create_source(spec)
             dataset = source.fetch()
         except SourceError as error:
-            self.call_from_thread(
-                self.notify,
+            self._deliver(
+                self._open_failed,
+                key,
                 f"failed to load {error.source_id or spec.id}: {error.message}",
-                severity="error",
             )
             return
         except Exception as error:
-            self.call_from_thread(self.notify, f"failed to load: {error}", severity="error")
+            self._deliver(self._open_failed, key, f"failed to load: {error}")
             return
-        self.call_from_thread(self._show_dataset, spec, source, dataset, viz, mapping)
+        self._deliver(self._show_dataset, key, spec, source, dataset, viz, mapping)
+
+    def _deliver(self, callback, *args) -> None:
+        try:
+            self.call_from_thread(callback, *args)
+        except RuntimeError:
+            pass  # app is shutting down
+
+    def _open_failed(self, key: tuple[str, str], message: str) -> None:
+        self._inflight_opens.discard(key)
+        self.notify(message, severity="error")
 
     def _show_dataset(
         self,
+        key: tuple[str, str],
         spec: SourceSpec,
         source: Source,
         dataset: DataSet,
         viz: str,
         mapping: ColumnMapping | None,
     ) -> None:
+        self._inflight_opens.discard(key)
         self.store.set(spec.id, dataset)
         self._remember(source.describe(), spec)
         refresh_seconds = 0.0

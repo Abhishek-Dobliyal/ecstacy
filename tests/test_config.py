@@ -90,3 +90,11 @@ def test_ensure_user_config_does_not_overwrite(tmp_path: Path, monkeypatch):
     data = yaml.safe_load(config_file.read_text())
     assert data["theme"] == "ecstacy-light"
     assert data["refresh"] == "10s"
+
+
+def test_version_matches_package_metadata():
+    from importlib.metadata import version as pkg_version
+
+    from ecstacy import __version__
+
+    assert __version__ == pkg_version("ecstacy-tui")

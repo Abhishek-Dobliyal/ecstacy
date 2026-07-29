@@ -50,7 +50,6 @@ class PanelConfig(BaseModel):
     value: str | None = None
     agg: str = "sum"
     bins: int = 20
-    layout: dict[str, int] = Field(default_factory=dict)
     where: str | None = None
     group_by: list[str] = Field(default_factory=list)
     select: list[str] = Field(default_factory=list)
@@ -79,8 +78,29 @@ class DashboardConfig(BaseModel):
     sources: list[SourceSpec] = Field(default_factory=list)
     panels: list[PanelConfig] = Field(default_factory=list)
 
+    @field_validator("refresh")
+    @classmethod
+    def _validate_refresh(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        try:
+            parse_duration(value)
+        except Exception as exc:
+            raise ValueError(f"invalid refresh duration {value!r}") from exc
+        return value
+
     @model_validator(mode="after")
     def validate_panel_sources(self) -> DashboardConfig:
+        seen: set[str] = set()
+        duplicates: set[str] = set()
+        for spec in self.sources:
+            if spec.id in seen:
+                duplicates.add(spec.id)
+            seen.add(spec.id)
+        if duplicates:
+            raise ConfigError(
+                f"duplicate source id(s): {', '.join(sorted(duplicates))}"
+            )
         source_ids = {s.id for s in self.sources}
         for panel in self.panels:
             if panel.source not in source_ids:

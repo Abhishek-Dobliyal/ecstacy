@@ -21,6 +21,7 @@ _SOURCE_INFO = {
     "file": "csv, tsv, json, ndjson, parquet or log files",
     "rest": "poll a REST endpoint returning json",
     "sql": "run a DuckDB query (can read files directly)",
+    "sqlite": "run a SQLite query (in-memory or file-backed)",
     "socket": "stream JSON records from a WebSocket endpoint",
 }
 
@@ -33,6 +34,9 @@ _CHART_INFO = {
     "sparkline": "compact one-line trend of a value column",
     "gauge": "latest value with delta and min/max",
     "heatmap": "correlation between numeric columns",
+    "box": "distribution quartiles per category",
+    "proportion": "share of total per category (horizontal bars)",
+    "summary": "count/mean/median/std/min/max per column",
     "json": "raw json payload as a tree",
 }
 
@@ -95,7 +99,7 @@ class HomeScreen(Screen):
         self.app.sub_title = "home"
         self._title("quick", "1 quick-start", "enter or click")
         self._title("sources", "2 sources", "supported input kinds")
-        self._title("recents", "recents", "enter to reopen")
+        self._title("recents", "3 recents", "enter to reopen")
         self._title("charts", "4 charts", "available visualizations")
         self._title("keys", "5 keys", "tab / arrows / enter")
         self.query_one("#keys", Static).update(self._keys_text())
@@ -119,7 +123,7 @@ class HomeScreen(Screen):
         count = len(recents)
         self._title(
             "recents",
-            "recents",
+            "3 recents",
             f"enter to reopen · {count} this session" if count else "enter to reopen",
         )
         if not recents:
@@ -138,7 +142,8 @@ class HomeScreen(Screen):
             "arrows within   enter select   click also works",
             "[bold yellow]HOME[/bold yellow]   o open   d dashboard   t theme   "
             "r refresh   ? help   q quit",
-            "[bold yellow]CHART[/bold yellow]  n / right next viz   p / left prev viz   esc back",
+            "[bold yellow]CHART[/bold yellow]  n / right next viz   p / left prev viz   "
+            "ctrl+f query   r refresh   esc back",
         ]
         return "\n".join(lines)
 

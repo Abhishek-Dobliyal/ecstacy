@@ -330,3 +330,8 @@ async def test_chart_screen_refreshes_data(tmp_path):
         assert screen.dataset.meta.rows == 4
         screen._stop_refresh()
 
+
+
+def test_category_columns_finds_pandas3_string_columns():
+    frame = pd.DataFrame({"region": ["us", "eu"], "value": [1, 2]})
+    assert charts._category_columns(frame) == ["region"]

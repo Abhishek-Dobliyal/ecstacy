@@ -125,6 +125,18 @@ def test_file_source_log_crlf_endings(tmp_path):
     assert list(dataset.frame["line"]) == ["line1", "line2", "line3"]
 
 
+def test_file_source_stdin_log_limits_rows(monkeypatch):
+    import io
+
+    monkeypatch.setattr("sys.stdin", io.StringIO("l1\nl2\nl3\nl4\nl5\n"))
+    spec = SourceSpec(
+        kind="file", id="stdin", params={"path": "-", "fmt": "log", "max_rows": 2}
+    )
+    dataset = create_source(spec).fetch()
+    assert dataset.meta.rows == 2
+    assert list(dataset.frame["line"]) == ["l1", "l2"]
+
+
 def test_file_source_stdin_csv(monkeypatch):
     import io
 

@@ -88,3 +88,26 @@ def test_sqlite_source_in_memory_persists_across_fetches():
     dataset = source.fetch()
     assert dataset.meta.rows == 3
     source.close()
+
+
+def test_sqlite_memory_fetch_from_another_thread():
+    import threading
+
+    source = create_source(
+        SourceSpec(kind="sqlite", id="t", params={"query": "select 1 as x"})
+    )
+    source.fetch()  # connection created on this thread
+    results, errors = [], []
+
+    def _fetch():
+        try:
+            results.append(source.fetch())
+        except Exception as exc:
+            errors.append(exc)
+
+    thread = threading.Thread(target=_fetch)
+    thread.start()
+    thread.join()
+    assert not errors
+    assert results[0].meta.rows == 1
+    source.close()

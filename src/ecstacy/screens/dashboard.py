@@ -93,6 +93,9 @@ class DashboardScreen(Screen):
         self._scheduler: Scheduler | None = None
         self._interval: float = 0.0
         self._jobs: list[Job] = []
+        self._panel_widgets: dict[int, Widget] = {}
+        self._panels_built = False
+        self._render_pending = False
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -105,6 +108,10 @@ class DashboardScreen(Screen):
 
     async def on_unmount(self) -> None:
         self._stop_scheduler()
+        for source in self._sources.values():
+            close = getattr(source, "close", None)
+            if callable(close):
+                close()
 
     def _stop_scheduler(self) -> None:
         if self._scheduler is not None:
@@ -147,9 +154,14 @@ class DashboardScreen(Screen):
 
     def _on_data(self, source_id: str):
         def _handle(dataset: DataSet) -> None:
+            if not self.is_attached:
+                return
             self._datasets[source_id] = dataset
             self.store.set(source_id, dataset)
-            self.call_after_refresh(self._render_panels_safe)
+            if not self._panels_built:
+                self._schedule_rebuild()
+            else:
+                self._update_panels_for(source_id)
 
         return _handle
 
@@ -169,15 +181,82 @@ class DashboardScreen(Screen):
         await holder.remove_children()
         await holder.mount(Label("loading dashboard...", id="dashboard-loading"))
 
+    def _schedule_rebuild(self) -> None:
+        if self._render_pending:
+            return
+        self._render_pending = True
+        self.call_after_refresh(self._render_panels_safe)
+
     async def _render_panels_safe(self) -> None:
+        self._render_pending = False
         await self._render_panels()
 
-    async def action_refresh(self) -> None:
-        self.notify("refreshing...")
-        if self._scheduler is None:
+    def _update_panels_for(self, source_id: str) -> None:
+        """Update only the panels fed by source_id, in place (no rebuild)."""
+        dataset = self._datasets.get(source_id)
+        if dataset is None:
             return
+        # a panel whose widget couldn't be built yet (source was missing at
+        # build time, or a viz/transform error) needs a full rebuild instead
+        needs_rebuild = any(
+            panel.source == source_id and idx not in self._panel_widgets
+            for idx, panel in enumerate(self.dashboard.panels)
+        )
+        if needs_rebuild:
+            self._schedule_rebuild()
+            return
+        targets = [
+            (idx, panel)
+            for idx, panel in enumerate(self.dashboard.panels)
+            if panel.source == source_id
+        ]
+        if not targets:
+            return
+
+        def _work() -> None:
+            # transforms + schema inference run off the UI thread
+            results: list[tuple[int, DataSet | TransformError]] = []
+            for idx, panel in targets:
+                try:
+                    frame = self._apply_transform(panel, dataset.frame)
+                    transformed = DataSet.from_dataframe(
+                        frame,
+                        source_id=dataset.meta.source_id,
+                        kind=dataset.meta.kind,
+                    )
+                except TransformError as error:
+                    results.append((idx, error))
+                else:
+                    results.append((idx, transformed))
+            try:
+                self.app.call_from_thread(self._apply_panel_results, results)
+            except RuntimeError:
+                pass  # app shutting down
+
+        self.run_worker(_work, thread=True, exclusive=False, exit_on_error=False)
+
+    def _apply_panel_results(
+        self, results: list[tuple[int, DataSet | TransformError]]
+    ) -> None:
+        for idx, result in results:
+            widget = self._panel_widgets.get(idx)
+            if widget is None or not widget.is_attached:
+                continue
+            if isinstance(result, TransformError):
+                self.notify(
+                    f"panel {idx + 1} transform error: {result.message}",
+                    severity="error",
+                )
+                continue
+            widget.set_data(result, _mapping_from_panel(self.dashboard.panels[idx]))
+
+    async def action_refresh(self) -> None:
+        if self._scheduler is None or not self._jobs:
+            self.notify("nothing to refresh", severity="warning")
+            return
+        self.notify("refreshing...")
         for job in self._jobs:
-            self._scheduler._run_once(job)
+            self._scheduler.run_now(job)
 
     def _with_max_rows(self, spec: SourceSpec) -> SourceSpec:
         if self._max_rows is None or spec.kind == "sql":
@@ -189,6 +268,8 @@ class DashboardScreen(Screen):
     async def _render_panels(self) -> None:
         holder = self.query_one("#dashboard-holder", Container)
         await holder.remove_children()
+        self._panel_widgets = {}
+        self._panels_built = False
         if not self.dashboard.panels:
             await holder.mount(Label("dashboard has no panels"))
             return
@@ -196,11 +277,13 @@ class DashboardScreen(Screen):
             await self._render_multi(holder)
         else:
             await self._render_single(holder)
+        self._panels_built = True
         # Rebuilding panels destroys the previously focused widget; reset focus
         # so panel search Inputs don't swallow the n/p/arrow screen bindings.
         self.set_focus(None)
 
     async def _render_multi(self, holder: Container) -> None:
+        self.app.sub_title = ""  # clear any stale single-panel subtitle
         cols, rows = _grid_size(len(self.dashboard.panels))
         grid = Grid(id="dashboard-grid")
         grid.styles.grid_size = (cols, rows)
@@ -210,6 +293,8 @@ class DashboardScreen(Screen):
             await grid.mount(container)
             if content is not None:
                 await container.mount(content)
+                if not isinstance(content, Label):
+                    self._panel_widgets[idx] = content
 
     async def _render_single(self, holder: Container) -> None:
         panel = self.dashboard.panels[self._panel_index]
@@ -217,6 +302,8 @@ class DashboardScreen(Screen):
         await holder.mount(container)
         if content is not None:
             await container.mount(content)
+            if not isinstance(content, Label):
+                self._panel_widgets[self._panel_index] = content
         self.app.sub_title = (
             f"{panel.viz} ({self._panel_index + 1}/{len(self.dashboard.panels)})"
         )
@@ -240,7 +327,7 @@ class DashboardScreen(Screen):
         transformed = DataSet.from_dataframe(
             frame,
             source_id=dataset.meta.source_id,
-                    kind=dataset.meta.kind,
+            kind=dataset.meta.kind,
         )
         mapping = _mapping_from_panel(panel)
         widget.set_data(transformed, mapping)

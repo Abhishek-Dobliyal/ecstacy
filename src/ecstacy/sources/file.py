@@ -11,6 +11,7 @@ from pandas.api import types as pdt
 
 from ecstacy.core import registry
 from ecstacy.core.dataset import DataSet
+from ecstacy.core.dataset import deduplicate_columns as _deduplicate_columns
 from ecstacy.sources.base import Source, SourceError
 
 _READERS = {
@@ -27,22 +28,6 @@ _READERS = {
 }
 
 _STDIN_SENTINEL = "-"
-
-
-def _deduplicate_columns(frame: pd.DataFrame) -> pd.DataFrame:
-    if len(set(frame.columns)) == len(frame.columns):
-        return frame
-    counts: dict[str, int] = {}
-    new_columns = []
-    for col in frame.columns:
-        if col in counts:
-            counts[col] += 1
-            new_columns.append(f"{col}_{counts[col]}")
-        else:
-            counts[col] = 0
-            new_columns.append(col)
-    frame.columns = new_columns
-    return frame
 
 
 @registry.sources.register("file")
@@ -138,7 +123,7 @@ class FileSource(Source):
             raise SourceError(
                 f"failed to read stdin as {self.fmt}: {exc}", source_id=self.id
             ) from exc
-        if self.max_rows is not None and self.fmt == "json":
+        if self.max_rows is not None:
             frame = frame.head(self.max_rows)
         frame = _deduplicate_columns(frame)
         frame = _autoparse_dates(frame)

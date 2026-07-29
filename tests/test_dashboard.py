@@ -171,3 +171,29 @@ def test_source_spec_from_dict_missing_kind():
 
     with pytest.raises(SourceSpecError):
         SourceSpec.from_dict({"id": "x"})
+
+
+def test_dashboard_duplicate_source_ids_rejected():
+    sources = [
+        SourceSpec(kind="file", id="a", params={"path": "x.csv"}),
+        SourceSpec(kind="file", id="a", params={"path": "y.csv"}),
+    ]
+    with pytest.raises(ConfigError, match="duplicate"):
+        DashboardConfig(sources=sources)
+
+
+def test_dashboard_invalid_refresh_rejected():
+    with pytest.raises(Exception, match="invalid refresh"):
+        DashboardConfig(refresh="5x")
+
+
+def test_panel_config_rejects_layout_field():
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        PanelConfig(source="s", viz="line", layout={"row": 0})
+
+
+def test_load_dashboard_missing_file():
+    with pytest.raises(ConfigError, match="no such file"):
+        load_dashboard("/does/not/exist.yaml")

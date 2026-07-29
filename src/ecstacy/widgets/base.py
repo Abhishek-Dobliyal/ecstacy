@@ -31,7 +31,9 @@ def auto_mapping(dataset: DataSet, viz_name: str) -> ColumnMapping:
     mapping.category = cats[0] if cats else (times[0] if times else None)
     if viz_name == "scatter":
         mapping.x = values[0] if values else None
-        mapping.y = values[1:2] if len(values) > 1 else values[:1]
+        # leave y empty with a single value column; plotting x against
+        # itself would show a meaningless diagonal
+        mapping.y = values[1:2] if len(values) > 1 else []
     else:
         mapping.x = times[0] if times else (cats[0] if cats else None)
         mapping.y = values[:4]

@@ -162,6 +162,35 @@ def test_set_data_invalidates_string_cache():
     assert tv._string_frame is None
 
 
+def test_fmt_blanks_nan_and_nat():
+    from ecstacy.widgets.table import _fmt
+
+    assert _fmt(float("nan")) == ""
+    assert _fmt(pd.NaT) == ""
+    assert _fmt(pd.NA) == ""
+    assert _fmt("x") == "x"
+    assert _fmt(12.5) == "12.5"
+
+
+def test_footer_text_shows_display_cap():
+    from ecstacy.widgets.table import _footer_text
+
+    assert _footer_text("", 50000, 50000, 1000, []) == "showing 1000 of 50000 rows"
+    text = _footer_text("us", 4, 10, 4, [("value", True)])
+    assert "4 rows (of 10)" in text
+    assert "sorted by value ↑" in text
+
+
+def test_filter_cached_skips_hidden_columns():
+    from ecstacy.widgets.table import TableView
+
+    tv = TableView()
+    tv._frame = _sample()
+    tv._hidden_columns = {"region"}
+    assert len(tv._filter_cached(tv._frame, "us")) == 0
+    assert len(tv._filter_cached(tv._frame, "10")) == 1
+
+
 @pytest.mark.asyncio
 async def test_table_column_selected_sorts_rows():
     from textual.app import App

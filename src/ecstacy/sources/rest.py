@@ -34,7 +34,8 @@ class RestSource(Source):
         self.query = query or {}
         self.timeout = timeout
         self.max_rows = max_rows
-        self._client: httpx.Client | None = None
+        # built eagerly: lazy init races when fetches overlap on pool threads
+        self._client: httpx.Client | None = httpx.Client(timeout=self.timeout)
 
     def describe(self) -> str:
         return f"rest:{self.url}"

@@ -5,6 +5,64 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- WebSocket sources now stream live into the chart view: batches from
+  `SocketSource.stream()` update the current visualization as they arrive.
+- Dashboard panels update in place on refresh instead of rebuilding the
+  whole grid, preserving each panel's table state (search, sort, hidden
+  columns) and skipping widget/CSS reconstruction per tick.
+- Manual refresh (`r`) now works on any opened source, not only with
+  `--refresh`.
+
+### Changed
+- The transform/query bar moved from `/` to `ctrl+f` (`/` stays the table
+  search in the table view).
+- Scheduler: a source never overlaps its own fetches — ticks arriving while
+  the previous fetch runs are skipped, so results can't arrive out of order
+  or pile up threads. In-flight workers are cancelled on screen exit, and
+  opening with `--refresh` no longer double-fetches at start.
+- Table search filtering/sorting and file export run on a worker thread, so
+  the UI stays responsive on large frames.
+- Table footer now reports "showing X of Y rows" when the 1000-row display
+  cap applies.
+- Search no longer matches against hidden columns.
+- `ecstacy --version` now reports the installed package version.
+
+### Fixed
+- Chart refresh no longer drops the active transform query (the view and the
+  row-count border reverted to raw data on every tick).
+- SQLite `:memory:` sources no longer crash with cross-thread
+  `ProgrammingError` under refresh.
+- stdin in log format now honors `--max-rows`.
+- Duplicate dashboard source ids are rejected with a clear `ConfigError`
+  (they previously overwrote each other silently).
+- Missing dashboard file raises a clean error instead of opening an empty
+  dashboard; invalid dashboard YAML exits cleanly in the CLI.
+- Invalid dashboard `refresh` durations are rejected at load time.
+- NaN/NaT values render as empty cells in the table, summary card, and JSON
+  tree (previously printed literal "nan"/"NaT").
+- Bar/proportion charts find category columns under pandas 3 string dtypes
+  and no longer soft-crash when category equals value.
+- Line charts no longer drop rows where an unrelated y-column is NaN, and
+  show a helpful title when no numeric column exists.
+- Scatter plots render datetime x-axes in seconds instead of unreadable
+  nanosecond integers; single-numeric-column datasets no longer plot a
+  meaningless x=y diagonal.
+- Sources producing duplicate column names (rest/sql/sqlite/socket) no
+  longer crash schema inference.
+- Gauge error messages are no longer overwritten by a running animation.
+- Dashboard refresh no longer leaks REST/SQLite connections, and the stale
+  single-panel subtitle is cleared when switching back to grid layout.
+- Home/help text now documents sqlite, box, proportion, summary, refresh,
+  and query keys accurately; splash text matches the keys that work.
+- Column picker toggles multiple columns without closing.
+
+### Removed
+- `PanelConfig.layout` (was parsed but never honored); dashboards using it
+  must drop the field.
+
 ## [0.5.0] - 2026-07-29
 
 ### Changed

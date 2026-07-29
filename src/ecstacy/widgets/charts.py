@@ -16,6 +16,16 @@ def _numeric_columns(frame: pd.DataFrame) -> list[str]:
     return [str(c) for c in frame.select_dtypes("number").columns]
 
 
+def _category_columns(frame: pd.DataFrame) -> list[str]:
+    return [
+        str(c)
+        for c in frame.columns
+        if pdt.is_object_dtype(frame[c])
+        or pdt.is_string_dtype(frame[c])
+        or isinstance(frame[c].dtype, pd.CategoricalDtype)
+    ]
+
+
 def _is_numeric(series: pd.Series) -> bool:
     return pdt.is_numeric_dtype(series)
 
@@ -103,9 +113,14 @@ class LineChart(PlotWidget):
 
     def _draw(self, plt, frame: pd.DataFrame, mapping: ColumnMapping) -> None:
         ycols = [c for c in mapping.y if c in frame.columns] or _numeric_columns(frame)
+        if not ycols:
+            plt.title("line chart needs a numeric column")
+            return
         xvals = _xvals(frame, mapping.x)
         palette = _theme_palette(self.app)
-        work = _dropna_xy(frame, mapping.x, ycols)
+        # Drop NaN on x only; each series handles its own NaN gaps below so
+        # one column's missing values don't truncate the other series.
+        work = _dropna_xy(frame, mapping.x, [])
         if len(work) > MAX_CHART_POINTS:
             work = work.tail(MAX_CHART_POINTS)
             if xvals is not None:
@@ -137,17 +152,16 @@ class BarChart(PlotWidget):
         category = mapping.category or mapping.x
         value = mapping.y[0] if mapping.y else mapping.value
         if not category:
-            cats = [
-                c for c in frame.columns
-                if frame[c].dtype == "object"
-                or str(frame[c].dtype).startswith("category")
-            ]
+            cats = _category_columns(frame)
             category = cats[0] if cats else None
         if not value:
             nums = _numeric_columns(frame)
             value = nums[0] if nums else None
         if not category or not value:
             plt.title("bar chart needs a category and a numeric column")
+            return
+        if category == value:
+            plt.title("bar chart needs distinct category and value columns")
             return
         work = frame[[category, value]]
         work[value] = numeric(work[value])
@@ -202,7 +216,8 @@ class Scatter(PlotWidget):
         work = _dropna_xy(frame, x, [y])
         if len(work) > MAX_CHART_POINTS:
             work = work.tail(MAX_CHART_POINTS)
-        xvals = numeric(work[x]).dropna()
+        # datetime x needs the seconds scale, not raw nanoseconds
+        xvals = numeric(_to_numeric_or_timestamp(work[x])).dropna()
         yvals = numeric(work[y]).dropna()
         common = xvals.index.intersection(yvals.index)
         if not len(common):
@@ -283,16 +298,16 @@ class ProportionChart(PlotWidget):
         category = mapping.category or mapping.x
         value = mapping.value or (mapping.y[0] if mapping.y else None)
         if not category:
-            cats = [
-                str(c) for c in frame.columns
-                if frame[c].dtype == "object" or str(frame[c].dtype).startswith("category")
-            ]
+            cats = _category_columns(frame)
             category = cats[0] if cats else None
         if not value:
             nums = _numeric_columns(frame)
             value = nums[0] if nums else None
         if not category or not value:
             plt.title("proportion chart needs a category and a numeric column")
+            return
+        if category == value:
+            plt.title("proportion chart needs distinct category and value columns")
             return
         work = frame[[category, value]]
         work[value] = numeric(work[value])

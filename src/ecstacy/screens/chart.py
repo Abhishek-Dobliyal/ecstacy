@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import asyncio
+from typing import TYPE_CHECKING
+
 from textual.app import ComposeResult
 from textual.containers import Container
 from textual.screen import Screen
@@ -9,9 +12,12 @@ from textual.widgets import DataTable, Footer, Header, Input
 from ecstacy.core.dataset import DataSet
 from ecstacy.core.scheduler import Job, Scheduler
 from ecstacy.core.transforms import TransformError, parse_transform_query
-from ecstacy.sources.base import SourceError, SourceSpec, create_source
+from ecstacy.sources.base import Source, SourceError, SourceSpec, create_source
 from ecstacy.widgets import create_viz, resolve_viz, viz_names
 from ecstacy.widgets.base import ColumnMapping
+
+if TYPE_CHECKING:
+    from textual.worker import Worker
 
 
 class ChartScreen(Screen):
@@ -32,7 +38,7 @@ class ChartScreen(Screen):
         ("left", "prev_viz", "Prev viz"),
         ("p", "prev_viz", "Prev viz"),
         ("r", "refresh", "Refresh"),
-        ("slash", "focus_transform", "Query"),
+        ("ctrl+f", "focus_transform", "Query"),
         ("t", "app.toggle_theme", "Theme"),
         ("escape", "app.pop_screen", "Back"),
     ]
@@ -55,14 +61,17 @@ class ChartScreen(Screen):
         self.index = self.names.index(resolved) if resolved in self.names else 0
         self._scheduler: Scheduler | None = None
         self._job: Job | None = None
+        self._stream_worker: Worker | None = None
         self._transform_query = ""
+        self._transform_cache: DataSet | None = None
+        self._transform_cache_key: tuple[int, str] | None = None
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
-        yield Input(
-            placeholder="/ to query  ·  where value > 100 | group_by region | agg mean | limit 10",
-            id="transform-bar",
+        placeholder = (
+            "ctrl+f to query  ·  where value > 100 | group_by region | agg mean | limit 10"
         )
+        yield Input(placeholder=placeholder, id="transform-bar")
         yield Container(id="viz-holder")
         yield Footer()
 
@@ -77,18 +86,27 @@ class ChartScreen(Screen):
         self._stop_refresh()
 
     def _stop_refresh(self) -> None:
+        if self._stream_worker is not None:
+            self._stream_worker.cancel()
+            self._stream_worker = None
         if self._scheduler is not None:
             self._scheduler.stop()
             self._scheduler = None
-            self._job = None
+        self._job = None
 
     def _start_refresh(self) -> None:
         self._stop_refresh()
-        if self.refresh_interval <= 0 or self.spec is None:
+        if self.spec is None:
             return
         try:
             source = create_source(self.spec)
-        except SourceError:
+        except SourceError as error:
+            self.notify(f"refresh unavailable: {error.message}", severity="warning")
+            return
+        if getattr(source, "is_stdin", False):
+            return  # re-reading stdin would hit EOF or block on a live pipe
+        if getattr(source, "supports_stream", False):
+            self._start_stream(source)
             return
         self._scheduler = Scheduler(self.app)
         self._job = Job(
@@ -97,9 +115,29 @@ class ChartScreen(Screen):
             on_data=self._on_refresh_data,
             on_error=self._on_refresh_error,
         )
-        self._scheduler.add(self._job)
+        # data is already fresh from the initial fetch; don't refetch at t=0
+        self._scheduler.add(self._job, run_immediately=False)
+
+    def _start_stream(self, source: Source) -> None:
+        self._stream_worker = self.run_worker(
+            self._consume_stream(source), exclusive=True, exit_on_error=False
+        )
+
+    async def _consume_stream(self, source: Source) -> None:
+        stream = source.stream()
+        try:
+            async for dataset in stream:
+                self._on_refresh_data(dataset)
+        except asyncio.CancelledError:
+            raise
+        except Exception as error:
+            self._on_refresh_error(error)
+        finally:
+            await stream.aclose()
 
     def _on_refresh_data(self, dataset: DataSet) -> None:
+        if not self.is_attached:
+            return
         self.dataset = dataset
         self.call_after_refresh(self._update_current_widget)
 
@@ -114,21 +152,23 @@ class ChartScreen(Screen):
     async def _update_current_widget(self) -> None:
         holder = self.query_one("#viz-holder", Container)
         widget = holder.children[0] if holder.children else None
+        dataset = self._get_transformed_dataset()
         if widget is not None and hasattr(widget, "set_data"):
-            widget.set_data(self.dataset, self.mapping)
-        self._update_border()
+            widget.set_data(dataset, self.mapping)
+        self._update_border(dataset)
 
-    def _update_border(self) -> None:
+    def _update_border(self, dataset: DataSet | None = None) -> None:
+        dataset = dataset or self.dataset
         holder = self.query_one("#viz-holder", Container)
         name = self.names[self.index]
         refresh_tag = (
             f"  ⟳ {self.refresh_interval:.0f}s" if self.refresh_interval > 0 else ""
         )
         holder.border_title = (
-            f"{self.index + 1} {name}  |  {self.dataset.meta.source_id}{refresh_tag}"
+            f"{self.index + 1} {name}  |  {dataset.meta.source_id}{refresh_tag}"
         )
         holder.border_subtitle = (
-            f"{self.dataset.meta.rows} rows   n next  p prev  r refresh  esc back"
+            f"{dataset.meta.rows} rows   n next  p prev  r refresh  esc back"
         )
 
     async def action_next_viz(self) -> None:
@@ -142,35 +182,41 @@ class ChartScreen(Screen):
     async def action_refresh(self) -> None:
         if self._scheduler is not None and self._job is not None:
             self.notify("refreshing...")
-            self._scheduler._run_once(self._job)
+            self._scheduler.run_now(self._job)
         else:
             self.notify("no refresh configured (use --refresh)", severity="warning")
 
-    def on_input_submitted(self, event: Input.Submitted) -> None:
+    async def on_input_submitted(self, event: Input.Submitted) -> None:
         if event.input.id != "transform-bar":
             return
         self._transform_query = event.value.strip()
-        import asyncio
-
-        asyncio.create_task(self._render_current())
+        await self._render_current()
 
     def _get_transformed_dataset(self) -> DataSet:
+        key = (id(self.dataset), self._transform_query)
+        if self._transform_cache_key == key and self._transform_cache is not None:
+            return self._transform_cache
         if not self._transform_query:
-            return self.dataset
-        try:
-            transform = parse_transform_query(self._transform_query)
-            frame = transform.apply(self.dataset.frame)
-        except TransformError as error:
-            self.notify(f"query error: {error.message}", severity="warning")
-            return self.dataset
-        except Exception as error:
-            self.notify(f"query error: {error}", severity="warning")
-            return self.dataset
-        return DataSet.from_dataframe(
-            frame,
-            source_id=self.dataset.meta.source_id,
-            kind=self.dataset.meta.kind,
-        )
+            result = self.dataset
+        else:
+            try:
+                transform = parse_transform_query(self._transform_query)
+                frame = transform.apply(self.dataset.frame)
+            except TransformError as error:
+                self.notify(f"query error: {error.message}", severity="warning")
+                result = self.dataset
+            except Exception as error:
+                self.notify(f"query error: {error}", severity="warning")
+                result = self.dataset
+            else:
+                result = DataSet.from_dataframe(
+                    frame,
+                    source_id=self.dataset.meta.source_id,
+                    kind=self.dataset.meta.kind,
+                )
+        self._transform_cache_key = key
+        self._transform_cache = result
+        return result
 
     def _focus_content(self, widget: Widget) -> None:
         """Focus the interactive part of the newly rendered widget.
@@ -193,7 +239,7 @@ class ChartScreen(Screen):
         await holder.mount(widget)
         dataset = self._get_transformed_dataset()
         widget.set_data(dataset, self.mapping)
-        self._update_border()
+        self._update_border(dataset)
         self.app.sub_title = (
             f"{dataset.meta.source_id}  |  {name}  "
             f"({self.index + 1}/{len(self.names)})"

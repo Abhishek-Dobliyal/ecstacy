@@ -28,6 +28,10 @@ class GaugeView(Static):
         self._timer = None
 
     def set_data(self, dataset: DataSet, mapping: ColumnMapping | None = None) -> None:
+        # stop any running animation so error messages aren't overwritten
+        if self._timer is not None:
+            self._timer.stop()
+            self._timer = None
         mapping = mapping or auto_mapping(dataset, self.viz_name)
         column = mapping.value or (mapping.y[0] if mapping.y else None)
         frame = dataset.frame
@@ -40,8 +44,8 @@ class GaugeView(Static):
             return
         self._name = column
         self._latest = float(series.iloc[-1])
-        self._previous = float(series.iloc[-2]) if len(series) > 1 else self._latest
-        self._delta = self._latest - self._previous
+        previous = float(series.iloc[-2]) if len(series) > 1 else self._latest
+        self._delta = self._latest - previous
         self._low = float(series.min())
         self._high = float(series.max())
         span = self._high - self._low or 1.0

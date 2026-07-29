@@ -189,3 +189,10 @@ async def test_summary_card_empty_frame():
     async with _App().run_test() as pilot:
         for _ in range(6):
             await pilot.pause()
+
+
+def test_summary_stat_blanks_nan():
+    from ecstacy.widgets.summary import _stat
+
+    assert _stat(float("nan")).strip() == ""
+    assert _stat(3.14159) == f"{3.14159:>12.2f}"

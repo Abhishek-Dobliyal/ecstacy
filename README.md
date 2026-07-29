@@ -168,9 +168,9 @@ chart (horizontal bars, formerly `pie`), summary card
 ## Keys
 
 Home: `o` open, `d` dashboard, `t` theme, `?` help, `q` quit.
-Chart: `n`/`right` next chart, `p`/`left` previous chart, `/` query/transform, `r` refresh, `t` theme, `esc` back.
+Chart: `n`/`right` next chart, `p`/`left` previous chart, `ctrl+f` query/transform, `r` refresh, `t` theme, `esc` back.
 Table: `s` sort by column, `/` focus search, `c` column picker, `e` export view, type to filter, `esc` clear.
-Dashboard: `m` toggle grid/single layout, `n`/`p` cycle panels, `esc` back.
+Dashboard: `m` toggle grid/single layout, `n`/`p` cycle panels, `r` refresh now, `esc` back.
 
 ## Configuration
 

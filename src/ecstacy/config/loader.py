@@ -67,6 +67,8 @@ def load_app_config(overrides: dict[str, Any] | None = None) -> AppConfig:
 
 def load_dashboard(path: str | Path) -> DashboardConfig:
     dashboard_path = Path(path).expanduser().resolve()
+    if not dashboard_path.exists():
+        raise ConfigError(f"no such file: {dashboard_path}")
     base_dir = dashboard_path.parent
     data = _read_yaml(dashboard_path)
     data = _resolve_source_paths(data, base_dir)

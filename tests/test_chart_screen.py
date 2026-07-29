@@ -121,6 +121,113 @@ async def test_box_proportion_heatmap_render_without_errors():
             assert rendered.strip(), f"{viz} rendered empty output"
 
 
+def test_transform_query_bound_to_ctrl_f():
+    from ecstacy.screens.chart import ChartScreen
+
+    keys = [binding[0] for binding in ChartScreen.BINDINGS]
+    assert "ctrl+f" in keys
+    assert "slash" not in keys
+
+
+@pytest.mark.asyncio
+async def test_refresh_keeps_transform_query_applied():
+    frame = pd.DataFrame({"region": ["us", "eu", "ap"], "value": [10.0, 150.0, 200.0]})
+    ds = DataSet.from_dataframe(frame, source_id="s", kind="test")
+
+    from textual.app import App
+
+    from ecstacy.screens.chart import ChartScreen
+
+    class _App(App):
+        def on_mount(self):
+            self.push_screen(ChartScreen(ds, "table"))
+
+    app = _App()
+    async with app.run_test() as pilot:
+        await _settle(pilot)
+        screen = app.screen
+        screen._transform_query = "where value > 100"
+        await screen._update_current_widget()
+        await _settle(pilot)
+        table_view = screen.query_one("TableView")
+        assert len(table_view._frame) == 2
+        assert "2 rows" in screen.query_one("#viz-holder").border_subtitle
+
+
+@pytest.mark.asyncio
+async def test_streaming_source_updates_dataset(monkeypatch):
+    from textual.app import App
+
+    from ecstacy.screens.chart import ChartScreen
+    from ecstacy.sources.base import Source, SourceSpec
+
+    class FakeStreamSource(Source):
+        kind = "socket"
+        supports_stream = True
+
+        def fetch(self):
+            raise NotImplementedError
+
+        async def stream(self):
+            for value in (1, 2):
+                yield DataSet.from_dataframe(
+                    pd.DataFrame({"v": [value]}), source_id="s", kind="socket"
+                )
+
+    monkeypatch.setattr(
+        "ecstacy.screens.chart.create_source", lambda spec: FakeStreamSource(id="s")
+    )
+    spec = SourceSpec(kind="socket", id="s", params={"url": "ws://example"})
+    ds = DataSet.from_dataframe(pd.DataFrame({"v": [0]}), source_id="s", kind="socket")
+
+    class _App(App):
+        def on_mount(self):
+            self.push_screen(ChartScreen(ds, "table", spec=spec, refresh=5.0))
+
+    app = _App()
+    async with app.run_test() as pilot:
+        await _settle(pilot, rounds=10)
+        assert app.screen.dataset.frame["v"].tolist() == [2]
+
+
+@pytest.mark.asyncio
+async def test_dashboard_updates_panels_in_place():
+    from textual.app import App
+
+    from ecstacy.config.schema import DashboardConfig, PanelConfig, SourceSpec
+    from ecstacy.core.store import Store
+    from ecstacy.screens.dashboard import DashboardScreen
+    from ecstacy.widgets.table import TableView
+
+    dashboard = DashboardConfig(
+        sources=[SourceSpec(kind="file", id="s", params={"path": "x.csv"})],
+        panels=[PanelConfig(viz="table", source="s")],
+    )
+
+    class _App(App):
+        def on_mount(self):
+            self.push_screen(DashboardScreen(dashboard, Store()))
+
+    app = _App()
+    async with app.run_test() as pilot:
+        await _settle(pilot)
+        screen = app.screen
+        v1 = DataSet.from_dataframe(pd.DataFrame({"a": [1, 2]}), source_id="s", kind="test")
+        screen._on_data("s")(v1)
+        await _settle(pilot, rounds=10)
+        widget = screen._panel_widgets[0]
+        assert isinstance(widget, TableView)
+        assert len(widget._frame) == 2
+        v2 = DataSet.from_dataframe(
+            pd.DataFrame({"a": [1, 2, 3]}), source_id="s", kind="test"
+        )
+        screen._on_data("s")(v2)
+        await app.workers.wait_for_complete()
+        await _settle(pilot, rounds=10)
+        assert screen._panel_widgets[0] is widget  # updated in place, not rebuilt
+        assert len(widget._frame) == 3
+
+
 @pytest.mark.asyncio
 async def test_dashboard_render_leaves_focus_clear():
     from textual.app import App

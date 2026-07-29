@@ -92,7 +92,9 @@ class ColumnPickerScreen(ModalScreen):
             self.hidden.discard(col)
         else:
             self.hidden.add(col)
-        self.dismiss(self.hidden)
+        # toggle in place; the updated set is returned on esc
+        marker = "[dim]○[/dim]" if col in self.hidden else "[green]●[/green]"
+        event.item.query_one(Label).update(f"{marker}  {col}")
 
     def action_cancel(self) -> None:
         self.dismiss(self.hidden)

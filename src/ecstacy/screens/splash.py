@@ -67,7 +67,7 @@ class SplashScreen(Screen):
             yield Center(Static("", id="stages", markup=True))
             yield Center(
                 Static(
-                    f"[dim]v{__version__}   press any key to continue[/dim]",
+                    f"[dim]v{__version__}   press enter to continue[/dim]",
                     id="version",
                     markup=True,
                 )

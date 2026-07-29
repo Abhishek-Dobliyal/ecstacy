@@ -12,7 +12,7 @@ from ecstacy.config.loader import (
     load_dashboard,
     user_config_path,
 )
-from ecstacy.config.schema import DashboardConfig
+from ecstacy.config.schema import ConfigError, DashboardConfig
 from ecstacy.sources.base import SourceError, SourceSpec, create_source
 from ecstacy.theming import theme_names
 from ecstacy.widgets import viz_names
@@ -312,8 +312,13 @@ def dashboard(
     max_rows: int | None = _max_rows_option(),
     no_splash: bool = typer.Option(True, "--no-splash/--splash"),
 ) -> None:
+    try:
+        config = load_dashboard(path)
+    except ConfigError as error:
+        typer.echo(f"cannot load dashboard: {error.message}", err=True)
+        raise typer.Exit(1) from error
     _launch(
-        dashboard=load_dashboard(path),
+        dashboard=config,
         theme=theme,
         max_rows=max_rows,
         no_splash=no_splash,

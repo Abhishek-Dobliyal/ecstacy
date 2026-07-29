@@ -17,19 +17,35 @@ class SqlSource(Source):
         super().__init__(id=id, query=query, db=db, **params)
         self.query = query
         self.db = db
+        self._conn: duckdb.DuckDBPyConnection | None = None
 
     def describe(self) -> str:
         return f"sql:{self.db}"
 
+    def _get_connection(self) -> duckdb.DuckDBPyConnection:
+        # Cache file-backed connections across refresh ticks. :memory:
+        # databases intentionally stay fresh per fetch so self-contained
+        # queries (incl. DDL) behave the same on every tick.
+        if self.db == ":memory:":
+            return duckdb.connect(self.db)
+        if self._conn is None:
+            self._conn = duckdb.connect(self.db)
+        return self._conn
+
+    def close(self) -> None:
+        if self._conn is not None:
+            self._conn.close()
+            self._conn = None
+
     def fetch(self) -> DataSet:
+        connection = self._get_connection()
         try:
-            connection = duckdb.connect(self.db)
-            try:
-                frame = connection.execute(self.query).df()
-            finally:
-                connection.close()
+            frame = connection.execute(self.query).df()
         except Exception as exc:
             raise SourceError(
                 f"DuckDB query failed: {exc}", source_id=self.id
             ) from exc
+        finally:
+            if self.db == ":memory:":
+                connection.close()
         return DataSet.from_dataframe(frame, source_id=self.id, kind=self.kind)

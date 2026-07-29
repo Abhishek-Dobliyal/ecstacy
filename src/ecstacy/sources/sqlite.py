@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+import threading
 from typing import Any
 
 import pandas as pd
@@ -27,6 +28,7 @@ class SqliteSource(Source):
         self.db = db
         self.max_rows = max_rows
         self._conn: sqlite3.Connection | None = None
+        self._lock = threading.Lock()
 
     def describe(self) -> str:
         return f"sqlite:{self.db}"
@@ -34,7 +36,9 @@ class SqliteSource(Source):
     def _get_connection(self) -> sqlite3.Connection:
         if self.db == ":memory:":
             if self._conn is None:
-                self._conn = sqlite3.connect(self.db)
+                # Scheduler fetches run on pool threads; allow cross-thread
+                # use and serialize access with self._lock.
+                self._conn = sqlite3.connect(self.db, check_same_thread=False)
             return self._conn
         return sqlite3.connect(self.db)
 
@@ -47,12 +51,10 @@ class SqliteSource(Source):
         conn: sqlite3.Connection | None = None
         owns_connection = False
         try:
-            if self.db == ":memory:":
+            with self._lock:
                 conn = self._get_connection()
-            else:
-                conn = self._get_connection()
-                owns_connection = True
-            frame = pd.read_sql_query(self.query, conn)
+                owns_connection = self.db != ":memory:"
+                frame = pd.read_sql_query(self.query, conn)
         except sqlite3.Error as exc:
             raise SourceError(
                 f"SQLite query failed: {exc}", source_id=self.id

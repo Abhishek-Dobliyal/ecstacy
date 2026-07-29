@@ -31,7 +31,7 @@ class SummaryCard(Static):
             f"  {'─' * 20} {'─' * 6} {'─' * 12} "
             f"{'─' * 12} {'─' * 12} {'─' * 12} {'─' * 12}"
         )
-        numeric_frame = frame[numeric_cols].apply(pd.to_numeric, errors="coerce")
+        numeric_frame = frame[numeric_cols]
         stats = numeric_frame.agg(["count", "mean", "median", "std", "min", "max"])
         for col in numeric_cols:
             col_stats = stats[col]
@@ -39,8 +39,14 @@ class SummaryCard(Static):
                 continue
             lines.append(
                 f"  {str(col):<20} {int(col_stats['count']):>6} "
-                f"{col_stats['mean']:>12.2f} {col_stats['median']:>12.2f} "
-                f"{col_stats['std']:>12.2f} {col_stats['min']:>12.2f} "
-                f"{col_stats['max']:>12.2f}"
+                f"{_stat(col_stats['mean'])} {_stat(col_stats['median'])} "
+                f"{_stat(col_stats['std'])} {_stat(col_stats['min'])} "
+                f"{_stat(col_stats['max'])}"
             )
         self.update("\n".join(lines))
+
+
+def _stat(value: float) -> str:
+    if pd.isna(value):
+        return f"{'':>12}"
+    return f"{value:>12.2f}"

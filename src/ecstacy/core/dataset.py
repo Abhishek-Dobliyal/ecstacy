@@ -64,9 +64,29 @@ class DataSet:
     def from_dataframe(
         cls, frame: pd.DataFrame, source_id: str, kind: str, raw: Any = None
     ) -> DataSet:
+        # Duplicate column names break schema inference (frame[name] returns
+        # a DataFrame, which has no .dtype); dedupe defensively for sources
+        # that don't do it themselves (rest/sql/sqlite/socket).
+        frame = deduplicate_columns(frame)
         schema = infer_schema(frame)
         meta = Meta(source_id=source_id, kind=kind, rows=len(frame), raw=raw)
         return cls(frame=frame, schema=schema, meta=meta)
+
+
+def deduplicate_columns(frame: pd.DataFrame) -> pd.DataFrame:
+    if len(set(frame.columns)) == len(frame.columns):
+        return frame
+    counts: dict[str, int] = {}
+    new_columns = []
+    for col in frame.columns:
+        if col in counts:
+            counts[col] += 1
+            new_columns.append(f"{col}_{counts[col]}")
+        else:
+            counts[col] = 0
+            new_columns.append(col)
+    frame.columns = new_columns
+    return frame
 
 
 def infer_schema(frame: pd.DataFrame) -> Schema:
