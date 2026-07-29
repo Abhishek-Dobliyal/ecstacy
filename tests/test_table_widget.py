@@ -143,17 +143,48 @@ def test_filter_cached_respects_sorted_index():
     assert list(result["value"]) == [12.0, 10.0]
 
 
-def test_set_data_invalidates_string_cache():
+def test_string_cache_invalidates_on_frame_swap():
+    from ecstacy.widgets.table import TableView
+
+    tv = TableView()
+    frame_a = _sample()
+    tv._frame = frame_a
+    tv._filter_cached(frame_a, "us")
+    assert tv._string_frame is not None
+    assert tv._string_frame_source is frame_a
+    # new frame object (as on refresh) → identity check invalidates cache
+    frame_b = _sample()
+    tv._frame = frame_b
+    tv._filter_cached(frame_b, "us")
+    assert tv._string_frame_source is frame_b
+
+
+def test_set_data_preserves_sort_and_hidden_on_same_columns():
     from ecstacy.core.dataset import DataSet
     from ecstacy.widgets.table import TableView
 
     tv = TableView()
-    tv._frame = _sample()
-    tv._filter_cached(tv._frame, "us")
-    assert tv._string_frame is not None
+    tv._columns_signature = tuple(str(c) for c in _sample().columns)
+    tv._sort_cols = [("value", True)]
+    tv._hidden_columns = {"region"}
     ds = DataSet.from_dataframe(_sample(), source_id="s", kind="test")
     tv.set_data(ds)
-    assert tv._string_frame is None
+    assert tv._sort_cols == [("value", True)]
+    assert tv._hidden_columns == {"region"}
+
+
+def test_set_data_resets_sort_and_hidden_on_column_change():
+    from ecstacy.core.dataset import DataSet
+    from ecstacy.widgets.table import TableView
+
+    tv = TableView()
+    tv._columns_signature = ("a", "b")
+    tv._sort_cols = [("a", True)]
+    tv._hidden_columns = {"a"}
+    ds = DataSet.from_dataframe(_sample(), source_id="s", kind="test")
+    tv.set_data(ds)
+    assert tv._sort_cols == []
+    assert tv._hidden_columns == set()
 
 
 def test_fmt_blanks_nan_and_nat():

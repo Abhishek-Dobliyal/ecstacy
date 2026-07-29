@@ -2,15 +2,23 @@ from __future__ import annotations
 
 import contextlib
 import io
+from dataclasses import dataclass, field
 
+import numpy as np
 import pandas as pd
 from pandas.api import types as pdt
 
 from ecstacy.core import registry
 from ecstacy.widgets.base import ColumnMapping, PlotWidget, numeric
 
+# Kept as a module-level constant for benchmarks and tests that need a
+# fixed point count.  The actual render path uses PlotWidget._budget().
 MAX_CHART_POINTS = 1000
 
+
+# -----------------------------------------------------------------------
+# Helpers
+# -----------------------------------------------------------------------
 
 def _numeric_columns(frame: pd.DataFrame) -> list[str]:
     return [str(c) for c in frame.select_dtypes("number").columns]
@@ -107,48 +115,219 @@ def _decorate(plt, title: str, xlabel: str | None = None, ylabel: str | None = N
         plt.ylabel(ylabel)
 
 
+# -----------------------------------------------------------------------
+# LTTB downsampling
+# -----------------------------------------------------------------------
+
+def _lttb(
+    x: np.ndarray, y: np.ndarray, threshold: int
+) -> tuple[np.ndarray, np.ndarray]:
+    """Largest-Triangle-Three-Buckets downsampling.
+
+    Reduces *(x, y)* to at most *threshold* points while preserving the
+    visual shape (peaks and valleys) at O(n) cost over the input length.
+    The first and last points are always kept.
+    """
+    n = len(x)
+    if n <= threshold or threshold < 3:
+        return x, y
+    out_x = np.empty(threshold)
+    out_y = np.empty(threshold)
+    out_x[0] = x[0]
+    out_y[0] = y[0]
+    bucket_size = (n - 2) / (threshold - 2)
+    prev_x = float(x[0])
+    prev_y = float(y[0])
+    for i in range(threshold - 2):
+        a = int(np.floor(i * bucket_size)) + 1
+        b = int(np.floor((i + 1) * bucket_size)) + 1
+        bx = x[a:b]
+        by = y[a:b]
+        if len(bx) == 0:
+            out_x[i + 1] = prev_x
+            out_y[i + 1] = prev_y
+            continue
+        # Average of the next bucket (triangle's third point).
+        c = int(np.floor((i + 1) * bucket_size)) + 1
+        d = min(int(np.floor((i + 2) * bucket_size)) + 1, n)
+        if c < d:
+            avg_x = float(np.mean(x[c:d]))
+            avg_y = float(np.mean(y[c:d]))
+        else:
+            avg_x = float(x[-1])
+            avg_y = float(y[-1])
+        # Triangle area for each candidate — maximise it.
+        areas = np.abs(
+            prev_x * (by - avg_y)
+            + bx * (avg_y - prev_y)
+            + avg_x * (prev_y - by)
+        )
+        idx = int(np.argmax(areas))
+        out_x[i + 1] = float(bx[idx])
+        out_y[i + 1] = float(by[idx])
+        prev_x = float(bx[idx])
+        prev_y = float(by[idx])
+    out_x[-1] = x[-1]
+    out_y[-1] = y[-1]
+    return out_x, out_y
+
+
+def _downsample_xy(
+    x: np.ndarray, y: np.ndarray, threshold: int
+) -> tuple[np.ndarray, np.ndarray]:
+    """LTTB downsample a paired (x, y) series, keeping points aligned."""
+    return _lttb(x, y, threshold)
+
+
+# -----------------------------------------------------------------------
+# Payloads
+# -----------------------------------------------------------------------
+
+@dataclass
+class _LineSeries:
+    x: list[float] | None  # None → use implicit y index
+    y: list[float]
+    label: str
+
+
+@dataclass
+class _LinePayload:
+    series: list[_LineSeries] = field(default_factory=list)
+    title: str = ""
+    xlabel: str | None = None
+    ylabel: str | None = None
+
+
+@dataclass
+class _BarPayload:
+    labels: list[str] = field(default_factory=list)
+    values: list[float] = field(default_factory=list)
+    title: str = ""
+    xlabel: str | None = None
+    ylabel: str | None = None
+
+
+@dataclass
+class _HistPayload:
+    values: list[float] = field(default_factory=list)
+    bins: int = 20
+    title: str = ""
+    xlabel: str | None = None
+    ylabel: str | None = None
+
+
+@dataclass
+class _ScatterPayload:
+    x: list[float] = field(default_factory=list)
+    y: list[float] = field(default_factory=list)
+    title: str = ""
+    xlabel: str | None = None
+    ylabel: str | None = None
+
+
+@dataclass
+class _HeatmapPayload:
+    corr: pd.DataFrame | None = None
+    title: str = ""
+
+
+@dataclass
+class _BoxPayload:
+    labels: list[str] = field(default_factory=list)
+    data: list[list[float]] = field(default_factory=list)
+    title: str = ""
+    ylabel: str | None = None
+
+
+@dataclass
+class _ProportionPayload:
+    labels: list[str] = field(default_factory=list)
+    values: list[float] = field(default_factory=list)
+    title: str = ""
+
+
+# -----------------------------------------------------------------------
+# Line
+# -----------------------------------------------------------------------
+
 @registry.viz.register("line")
 class LineChart(PlotWidget):
     viz_name = "line"
 
-    def _draw(self, plt, frame: pd.DataFrame, mapping: ColumnMapping) -> None:
+    def _prepare(self, frame: pd.DataFrame, mapping: ColumnMapping, budget: int):
         ycols = [c for c in mapping.y if c in frame.columns] or _numeric_columns(frame)
         if not ycols:
-            plt.title("line chart needs a numeric column")
-            return
-        xvals = _xvals(frame, mapping.x)
-        palette = _theme_palette(self.app)
-        # Drop NaN on x only; each series handles its own NaN gaps below so
-        # one column's missing values don't truncate the other series.
-        work = _dropna_xy(frame, mapping.x, [])
-        if len(work) > MAX_CHART_POINTS:
-            work = work.tail(MAX_CHART_POINTS)
-            if xvals is not None:
-                xvals = xvals.tail(MAX_CHART_POINTS)
-        for i, col in enumerate(ycols):
-            color = _hex_rgb(palette[i % len(palette)])
-            series = numeric(work[col]).dropna()
-            yvals = series.tolist()
-            if not yvals:
+            return _LinePayload(title="line chart needs a numeric column")
+        xcol = mapping.x if mapping.x and mapping.x in frame.columns else None
+        # Truncate BEFORE dropna so NaN-removal runs on ≤budget rows, not
+        # the full frame.
+        work = frame
+        if len(work) > budget:
+            work = work.tail(budget)
+        series_list: list[_LineSeries] = []
+        for col in ycols:
+            yvals_raw = numeric(work[col]).dropna()
+            if yvals_raw.empty:
                 continue
-            current_x = xvals.loc[series.index] if xvals is not None else None
-            if current_x is not None:
-                plt.plot(
-                    current_x.tolist(), yvals, label=col, marker="braille", color=color
-                )
+            if xcol is not None and xcol in work.columns:
+                x_raw = _to_numeric_or_timestamp(work[xcol])
+                # Align x to y's non-null index.
+                x_aligned = x_raw.loc[yvals_raw.index].dropna()
+                y_aligned = yvals_raw.loc[x_aligned.index]
+                if len(y_aligned) > budget:
+                    xs, ys = _downsample_xy(
+                        x_aligned.to_numpy(dtype=float),
+                        y_aligned.to_numpy(dtype=float),
+                        budget,
+                    )
+                    series_list.append(_LineSeries(x=xs.tolist(), y=ys.tolist(), label=col))
+                else:
+                    series_list.append(_LineSeries(
+                        x=x_aligned.to_numpy(dtype=float).tolist(),
+                        y=y_aligned.to_numpy(dtype=float).tolist(),
+                        label=col,
+                    ))
             else:
-                plt.plot(yvals, label=col, marker="braille", color=color)
+                yvals = yvals_raw.to_numpy(dtype=float)
+                if len(yvals) > budget:
+                    idx = np.arange(len(yvals))
+                    _, ys = _lttb(idx, yvals, budget)
+                    series_list.append(_LineSeries(x=None, y=ys.tolist(), label=col))
+                else:
+                    series_list.append(_LineSeries(x=None, y=yvals.tolist(), label=col))
         title = " / ".join(ycols) if ycols else "line"
-        if mapping.x:
-            title = f"{title} over {mapping.x}"
-        _decorate(plt, title, xlabel=mapping.x, ylabel=", ".join(ycols) or None)
+        if xcol:
+            title = f"{title} over {xcol}"
+        return _LinePayload(
+            series=series_list,
+            title=title,
+            xlabel=xcol,
+            ylabel=", ".join(ycols) or None,
+        )
 
+    def _paint(self, plt, payload: _LinePayload, theme) -> None:
+        if not payload.series:
+            _decorate(plt, payload.title)
+            return
+        palette = [theme.primary, theme.accent, theme.secondary]
+        for i, s in enumerate(payload.series):
+            color = _hex_rgb(palette[i % len(palette)])
+            if s.x is not None:
+                plt.plot(s.x, s.y, label=s.label, marker="braille", color=color)
+            else:
+                plt.plot(s.y, label=s.label, marker="braille", color=color)
+        _decorate(plt, payload.title, xlabel=payload.xlabel, ylabel=payload.ylabel)
+
+
+# -----------------------------------------------------------------------
+# Bar
+# -----------------------------------------------------------------------
 
 @registry.viz.register("bar")
 class BarChart(PlotWidget):
     viz_name = "bar"
 
-    def _draw(self, plt, frame: pd.DataFrame, mapping: ColumnMapping) -> None:
+    def _prepare(self, frame: pd.DataFrame, mapping: ColumnMapping, budget: int):
         category = mapping.category or mapping.x
         value = mapping.y[0] if mapping.y else mapping.value
         if not category:
@@ -158,53 +337,87 @@ class BarChart(PlotWidget):
             nums = _numeric_columns(frame)
             value = nums[0] if nums else None
         if not category or not value:
-            plt.title("bar chart needs a category and a numeric column")
-            return
+            return _BarPayload(title="bar chart needs a category and a numeric column")
         if category == value:
-            plt.title("bar chart needs distinct category and value columns")
-            return
-        work = frame[[category, value]]
+            return _BarPayload(title="bar chart needs distinct category and value columns")
+        work = frame[[category, value]].copy()
         work[value] = numeric(work[value])
         work = work.dropna(subset=[category, value])
         if work.empty:
-            plt.title("bar chart has no data after removing NaNs")
-            return
+            return _BarPayload(title="bar chart has no data after removing NaNs")
         grouped = work.groupby(category)[value].sum().sort_values(ascending=False).head(30)
         labels = [str(i) for i in grouped.index]
-        colors = _heat_colors(grouped.tolist(), self.app.current_theme)
-        plt.bar(labels, grouped.tolist(), orientation="vertical", color=colors, marker="braille")
-        _decorate(plt, f"{value} by {category}", xlabel=category, ylabel=value)
+        return _BarPayload(
+            labels=labels,
+            values=grouped.tolist(),
+            title=f"{value} by {category}",
+            xlabel=category,
+            ylabel=value,
+        )
 
+    def _paint(self, plt, payload: _BarPayload, theme) -> None:
+        if not payload.labels:
+            _decorate(plt, payload.title)
+            return
+        colors = _heat_colors(payload.values, theme)
+        plt.bar(
+            payload.labels,
+            payload.values,
+            orientation="vertical",
+            color=colors,
+            marker="braille",
+        )
+        _decorate(plt, payload.title, xlabel=payload.xlabel, ylabel=payload.ylabel)
+
+
+# -----------------------------------------------------------------------
+# Histogram
+# -----------------------------------------------------------------------
 
 @registry.viz.register("histogram")
 class Histogram(PlotWidget):
     viz_name = "histogram"
 
-    def _draw(self, plt, frame: pd.DataFrame, mapping: ColumnMapping) -> None:
+    def _prepare(self, frame: pd.DataFrame, mapping: ColumnMapping, budget: int):
         column = mapping.value or (mapping.y[0] if mapping.y else None)
         if not column:
             columns = _numeric_columns(frame)
             column = columns[0] if columns else None
         if not column:
-            return
-        series = numeric(frame[column]).dropna()
-        if len(series) > MAX_CHART_POINTS:
-            series = series.tail(MAX_CHART_POINTS)
-        values = series.tolist()
+            return _HistPayload(title="")
+        # Truncate before coercion/dropna so they run on ≤budget rows.
+        series = frame[column]
+        if len(series) > budget:
+            series = series.tail(budget)
+        values = numeric(series).dropna().tolist()
         if not values:
-            plt.title(f"no numeric data for {column}")
-            return
-        plt.hist(
-            values, mapping.bins, color=_hex_rgb(self.app.current_theme.accent), marker="braille"
+            return _HistPayload(title=f"no numeric data for {column}")
+        return _HistPayload(
+            values=values,
+            bins=mapping.bins,
+            title=f"distribution of {column}",
+            xlabel=column,
+            ylabel="count",
         )
-        _decorate(plt, f"distribution of {column}", xlabel=column, ylabel="count")
 
+    def _paint(self, plt, payload: _HistPayload, theme) -> None:
+        if not payload.values:
+            if payload.title:
+                _decorate(plt, payload.title)
+            return
+        plt.hist(payload.values, payload.bins, color=_hex_rgb(theme.accent), marker="braille")
+        _decorate(plt, payload.title, xlabel=payload.xlabel, ylabel=payload.ylabel)
+
+
+# -----------------------------------------------------------------------
+# Scatter
+# -----------------------------------------------------------------------
 
 @registry.viz.register("scatter")
 class Scatter(PlotWidget):
     viz_name = "scatter"
 
-    def _draw(self, plt, frame: pd.DataFrame, mapping: ColumnMapping) -> None:
+    def _prepare(self, frame: pd.DataFrame, mapping: ColumnMapping, budget: int):
         x = mapping.x
         y = mapping.y[0] if mapping.y else mapping.value
         if not x or not y:
@@ -212,95 +425,137 @@ class Scatter(PlotWidget):
             if len(nums) >= 2:
                 x, y = nums[0], nums[1]
         if not x or not y:
-            plt.title("scatter needs two numeric columns")
-            return
-        work = _dropna_xy(frame, x, [y])
-        if len(work) > MAX_CHART_POINTS:
-            work = work.tail(MAX_CHART_POINTS)
-        # datetime x needs the seconds scale, not raw nanoseconds
-        xvals = numeric(_to_numeric_or_timestamp(work[x])).dropna()
-        yvals = numeric(work[y]).dropna()
-        common = xvals.index.intersection(yvals.index)
-        if not len(common):
-            plt.title("scatter has no overlapping x/y data")
+            return _ScatterPayload(title="scatter needs two numeric columns")
+        # Drop NaN on the x/y pair, then truncate before LTTB.
+        work = frame[[x, y]].dropna()
+        if len(work) > budget:
+            work = work.tail(budget)
+        if work.empty:
+            return _ScatterPayload(title="scatter has no overlapping x/y data")
+        xvals = numeric(_to_numeric_or_timestamp(work[x])).to_numpy(dtype=float)
+        yvals = numeric(work[y]).to_numpy(dtype=float)
+        if len(xvals) > budget:
+            xvals, yvals = _downsample_xy(xvals, yvals, budget)
+        return _ScatterPayload(
+            x=xvals.tolist(),
+            y=yvals.tolist(),
+            title=f"{y} vs {x}",
+            xlabel=x,
+            ylabel=y,
+        )
+
+    def _paint(self, plt, payload: _ScatterPayload, theme) -> None:
+        if not payload.x:
+            _decorate(plt, payload.title)
             return
         plt.scatter(
-            xvals.loc[common].tolist(),
-            yvals.loc[common].tolist(),
+            payload.x,
+            payload.y,
             marker="braille",
-            color=_hex_rgb(self.app.current_theme.secondary),
+            color=_hex_rgb(theme.secondary),
         )
-        _decorate(plt, f"{y} vs {x}", xlabel=x, ylabel=y)
+        _decorate(plt, payload.title, xlabel=payload.xlabel, ylabel=payload.ylabel)
 
+
+# -----------------------------------------------------------------------
+# Heatmap
+# -----------------------------------------------------------------------
 
 @registry.viz.register("heatmap")
 class Heatmap(PlotWidget):
     viz_name = "heatmap"
 
-    def _draw(self, plt, frame: pd.DataFrame, mapping: ColumnMapping) -> None:
+    def _prepare(self, frame: pd.DataFrame, mapping: ColumnMapping, budget: int):
         numbers = frame.select_dtypes("number")
         if numbers.shape[1] < 2:
-            plt.title("heatmap needs at least two numeric columns")
-            return
-        if len(numbers) > MAX_CHART_POINTS:
-            numbers = numbers.tail(MAX_CHART_POINTS)
+            return _HeatmapPayload(title="heatmap needs at least two numeric columns")
+        if len(numbers) > budget:
+            numbers = numbers.tail(budget)
         corr = numbers.corr().fillna(0.0).round(2)
+        return _HeatmapPayload(corr=corr, title="correlation matrix")
+
+    def _paint(self, plt, payload: _HeatmapPayload, theme) -> None:
+        if payload.corr is None:
+            _decorate(plt, payload.title)
+            return
         # plotext 5.3.2's draw_heatmap prints the frame to stdout (library
         # bug); suppress it so it doesn't corrupt the TUI display.
         with contextlib.redirect_stdout(io.StringIO()):
-            plt.heatmap(corr)
-        _decorate(plt, "correlation matrix")
+            plt.heatmap(payload.corr)
+        _decorate(plt, payload.title)
 
+
+# -----------------------------------------------------------------------
+# Box
+# -----------------------------------------------------------------------
 
 @registry.viz.register("box")
 class BoxPlot(PlotWidget):
     viz_name = "box"
 
-    def _draw(self, plt, frame: pd.DataFrame, mapping: ColumnMapping) -> None:
+    def _prepare(self, frame: pd.DataFrame, mapping: ColumnMapping, budget: int):
         value = mapping.value or (mapping.y[0] if mapping.y else None)
         category = mapping.category or mapping.x
         if not value:
             nums = _numeric_columns(frame)
             value = nums[0] if nums else None
         if not value:
-            plt.title("box plot needs a numeric column")
-            return
+            return _BoxPayload(title="box plot needs a numeric column")
         if not category or category not in frame.columns:
             category = None
-        palette = _theme_palette(self.app)
-        colors = [_hex_rgb(palette[0]), _hex_rgb(palette[1])]
         if category:
             grouped = frame.dropna(subset=[value, category]).groupby(category)[value]
             labels: list[str] = []
             data: list[list[float]] = []
             for cat, group in grouped:
                 vals = numeric(group).dropna()
-                if len(vals) > MAX_CHART_POINTS:
-                    vals = vals.tail(MAX_CHART_POINTS)
+                if len(vals) > budget:
+                    vals = vals.tail(budget)
                 vals = vals.tolist()
                 if not vals:
                     continue
                 labels.append(str(cat))
                 data.append(vals)
             if not data:
-                plt.title(f"no data for {value}")
-                return
-            plt.box(labels, data, colors=colors)
-            _decorate(plt, f"{value} by {category}", ylabel=value)
+                return _BoxPayload(title=f"no data for {value}")
+            return _BoxPayload(
+                labels=labels,
+                data=data,
+                title=f"{value} by {category}",
+                ylabel=value,
+            )
         else:
             series = numeric(frame[value]).dropna()
+            if len(series) > budget:
+                series = series.tail(budget)
             if series.empty:
-                plt.title(f"no data for {value}")
-                return
-            plt.box([value], [series.tolist()], colors=colors)
-            _decorate(plt, f"distribution of {value}", ylabel=value)
+                return _BoxPayload(title=f"no data for {value}")
+            return _BoxPayload(
+                labels=[value],
+                data=[series.tolist()],
+                title=f"distribution of {value}",
+                ylabel=value,
+            )
 
+    def _paint(self, plt, payload: _BoxPayload, theme) -> None:
+        if not payload.data:
+            _decorate(plt, payload.title)
+            return
+        palette = [theme.primary, theme.accent, theme.secondary]
+        colors = [_hex_rgb(palette[0]), _hex_rgb(palette[1])]
+        plt.box(payload.labels, payload.data, colors=colors)
+        _decorate(plt, payload.title, ylabel=payload.ylabel)
+
+
+# -----------------------------------------------------------------------
+# Proportion
+# -----------------------------------------------------------------------
 
 @registry.viz.register("proportion")
 class ProportionChart(PlotWidget):
     viz_name = "proportion"
 
-    def _draw(self, plt, frame: pd.DataFrame, mapping: ColumnMapping) -> None:
+    def _prepare(self, frame: pd.DataFrame, mapping: ColumnMapping, budget: int):
         category = mapping.category or mapping.x
         value = mapping.value or (mapping.y[0] if mapping.y else None)
         if not category:
@@ -310,22 +565,35 @@ class ProportionChart(PlotWidget):
             nums = _numeric_columns(frame)
             value = nums[0] if nums else None
         if not category or not value:
-            plt.title("proportion chart needs a category and a numeric column")
-            return
+            return _ProportionPayload(
+                title="proportion chart needs a category and a numeric column"
+            )
         if category == value:
-            plt.title("proportion chart needs distinct category and value columns")
-            return
-        work = frame[[category, value]]
+            return _ProportionPayload(
+                title="proportion chart needs distinct category and value columns"
+            )
+        work = frame[[category, value]].copy()
         work[value] = numeric(work[value])
         work = work.dropna(subset=[category, value])
         if work.empty:
-            plt.title("proportion chart has no data after removing NaNs")
-            return
+            return _ProportionPayload(title="proportion chart has no data after removing NaNs")
         grouped = work.groupby(category)[value].sum().sort_values(ascending=False).head(20)
         labels = [str(i) for i in grouped.index]
-        values = grouped.tolist()
-        palette = _theme_palette(self.app)
-        colors = [_hex_rgb(palette[i % len(palette)]) for i in range(len(labels))]
+        return _ProportionPayload(
+            labels=labels,
+            values=grouped.tolist(),
+            title=f"{value} by {category}",
+        )
+
+    def _paint(self, plt, payload: _ProportionPayload, theme) -> None:
+        if not payload.labels:
+            _decorate(plt, payload.title)
+            return
+        palette = [theme.primary, theme.accent, theme.secondary]
+        colors = [_hex_rgb(palette[i % len(palette)]) for i in range(len(payload.labels))]
         # plotext has no pie primitive; horizontal bars are the proportion view
-        plt.bar(labels, values, orientation="horizontal", color=colors, marker="braille")
-        _decorate(plt, f"{value} by {category}")
+        plt.bar(
+            payload.labels, payload.values,
+            orientation="horizontal", color=colors, marker="braille",
+        )
+        _decorate(plt, payload.title)

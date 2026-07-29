@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -335,3 +336,44 @@ async def test_chart_screen_refreshes_data(tmp_path):
 def test_category_columns_finds_pandas3_string_columns():
     frame = pd.DataFrame({"region": ["us", "eu"], "value": [1, 2]})
     assert charts._category_columns(frame) == ["region"]
+
+
+# -----------------------------------------------------------------------
+# LTTB downsampling
+# -----------------------------------------------------------------------
+
+def test_lttb_preserves_extremes():
+    """LTTB retains a spike that tail() would drop."""
+    y = np.zeros(1000)
+    y[500] = 100.0
+    x = np.arange(1000, dtype=float)
+    _, sy = charts._lttb(x, y, 100)
+    assert 100.0 in sy
+    # tail(100) would miss the spike entirely (it's at index 500)
+
+
+def test_lttb_output_length():
+    x = np.arange(10000, dtype=float)
+    y = np.sin(x / 100)
+    sx, sy = charts._lttb(x, y, 500)
+    assert len(sx) == 500
+    assert len(sy) == 500
+
+
+def test_lttb_short_series_unchanged():
+    x = np.arange(10, dtype=float)
+    y = np.arange(10, dtype=float)
+    sx, sy = charts._lttb(x, y, 100)
+    assert len(sx) == 10
+    assert list(sx) == list(x)
+    assert list(sy) == list(y)
+
+
+def test_lttb_preserves_endpoints():
+    x = np.arange(1000, dtype=float)
+    y = np.sin(x / 100)
+    sx, sy = charts._lttb(x, y, 50)
+    assert sx[0] == x[0]
+    assert sx[-1] == x[-1]
+    assert sy[0] == y[0]
+    assert sy[-1] == y[-1]

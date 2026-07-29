@@ -52,6 +52,7 @@ class TableView(Vertical):
         self._string_frame_source: pd.DataFrame | None = None
         self._search_gen = 0
         self._rendered_columns: tuple[str, ...] = ()
+        self._columns_signature: tuple[str, ...] = ()
 
     def compose(self) -> ComposeResult:
         yield Input(placeholder="/ to search  ·  type to filter rows", id="table-search")
@@ -64,6 +65,7 @@ class TableView(Vertical):
         table.zebra_stripes = True
         if self._pending_dataset is not None:
             self._frame = self._pending_dataset.frame
+            self._columns_signature = tuple(str(c) for c in self._frame.columns)
             self._pending_dataset = None
             self._populate()
 
@@ -137,12 +139,17 @@ class TableView(Vertical):
         self._populate(self._search_value)
 
     def set_data(self, dataset: DataSet, mapping: ColumnMapping | None = None) -> None:
-        self._sort_cols = []
-        self._hidden_columns = set()
-        self._string_frame = None
-        self._string_frame_source = None
+        new_frame = dataset.frame
+        new_sig = tuple(str(c) for c in new_frame.columns)
+        if new_sig != self._columns_signature:
+            self._sort_cols = []
+            self._hidden_columns = set()
+            self._columns_signature = new_sig
+        # The string-frame cache is keyed on frame identity in
+        # _string_frame_cached; let it invalidate naturally when the frame
+        # object changes (refresh tick) instead of busting it here.
         if self.is_mounted:
-            self._frame = dataset.frame
+            self._frame = new_frame
             self._populate()
         else:
             self._pending_dataset = dataset
