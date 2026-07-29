@@ -161,8 +161,9 @@ ecstacy config path
 ## Visualizations
 
 table (sortable, searchable, column picker, export), line, bar, histogram,
-scatter, sparkline, gauge, heatmap (correlation matrix), box plot, pie chart,
-summary card (count/mean/median/std/min/max), json tree.
+scatter, sparkline, gauge, heatmap (correlation matrix), box plot, proportion
+chart (horizontal bars, formerly `pie`), summary card
+(count/mean/median/std/min/max), json tree.
 
 ## Keys
 

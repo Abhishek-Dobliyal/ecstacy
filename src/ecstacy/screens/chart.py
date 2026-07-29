@@ -10,7 +10,7 @@ from ecstacy.core.dataset import DataSet
 from ecstacy.core.scheduler import Job, Scheduler
 from ecstacy.core.transforms import TransformError, parse_transform_query
 from ecstacy.sources.base import SourceError, SourceSpec, create_source
-from ecstacy.widgets import create_viz, viz_names
+from ecstacy.widgets import create_viz, resolve_viz, viz_names
 from ecstacy.widgets.base import ColumnMapping
 
 
@@ -51,7 +51,8 @@ class ChartScreen(Screen):
         self.spec = spec
         self.refresh_interval = refresh
         self.names = viz_names()
-        self.index = self.names.index(viz_name) if viz_name in self.names else 0
+        resolved = resolve_viz(viz_name)
+        self.index = self.names.index(resolved) if resolved in self.names else 0
         self._scheduler: Scheduler | None = None
         self._job: Job | None = None
         self._transform_query = ""

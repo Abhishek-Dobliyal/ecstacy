@@ -87,7 +87,7 @@ async def test_focus_returns_to_table_after_cycling_back():
 
 
 @pytest.mark.asyncio
-async def test_box_pie_heatmap_render_without_errors():
+async def test_box_proportion_heatmap_render_without_errors():
     frame = pd.DataFrame(
         {
             "region": ["us", "eu", "us", "eu", "latam", "latam"] * 4,
@@ -110,7 +110,7 @@ async def test_box_pie_heatmap_render_without_errors():
     async with app.run_test() as pilot:
         await _settle(pilot)
         screen = app.screen
-        for viz in ("box", "pie", "heatmap"):
+        for viz in ("box", "proportion", "heatmap"):
             idx = screen.names.index(viz)
             while screen.index != idx:
                 await screen.action_next_viz()

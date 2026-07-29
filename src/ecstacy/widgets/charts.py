@@ -275,9 +275,9 @@ class BoxPlot(PlotWidget):
             _decorate(plt, f"distribution of {value}", ylabel=value)
 
 
-@registry.viz.register("pie")
-class PieChart(PlotWidget):
-    viz_name = "pie"
+@registry.viz.register("proportion")
+class ProportionChart(PlotWidget):
+    viz_name = "proportion"
 
     def _draw(self, plt, frame: pd.DataFrame, mapping: ColumnMapping) -> None:
         category = mapping.category or mapping.x
@@ -292,13 +292,13 @@ class PieChart(PlotWidget):
             nums = _numeric_columns(frame)
             value = nums[0] if nums else None
         if not category or not value:
-            plt.title("pie chart needs a category and a numeric column")
+            plt.title("proportion chart needs a category and a numeric column")
             return
         work = frame[[category, value]]
         work[value] = numeric(work[value])
         work = work.dropna(subset=[category, value])
         if work.empty:
-            plt.title("pie chart has no data after removing NaNs")
+            plt.title("proportion chart has no data after removing NaNs")
             return
         grouped = work.groupby(category)[value].sum().sort_values(ascending=False).head(20)
         labels = [str(i) for i in grouped.index]

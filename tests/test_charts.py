@@ -198,7 +198,7 @@ async def test_box_plot_no_numeric_column():
 
 
 @pytest.mark.asyncio
-async def test_pie_chart_renders():
+async def test_proportion_chart_renders():
     from textual.app import App
 
     from ecstacy.core.dataset import DataSet
@@ -210,7 +210,7 @@ async def test_pie_chart_renders():
                 {"region": ["us", "eu", "ap"], "value": [100, 50, 25]}
             )
             ds = DataSet.from_dataframe(df, source_id="s", kind="test")
-            self.push_screen(ChartScreen(ds, "pie"))
+            self.push_screen(ChartScreen(ds, "proportion"))
 
     async with _App().run_test() as pilot:
         for _ in range(6):
@@ -218,7 +218,7 @@ async def test_pie_chart_renders():
 
 
 @pytest.mark.asyncio
-async def test_pie_chart_no_numeric_column():
+async def test_proportion_chart_no_numeric_column():
     from textual.app import App
 
     from ecstacy.core.dataset import DataSet
@@ -228,11 +228,43 @@ async def test_pie_chart_no_numeric_column():
         def on_mount(self):
             df = pd.DataFrame({"region": ["us", "eu"]})
             ds = DataSet.from_dataframe(df, source_id="s", kind="test")
-            self.push_screen(ChartScreen(ds, "pie"))
+            self.push_screen(ChartScreen(ds, "proportion"))
 
     async with _App().run_test() as pilot:
         for _ in range(6):
             await pilot.pause()
+
+
+def test_pie_alias_resolves_to_proportion():
+    from ecstacy.widgets import create_viz, resolve_viz, viz_names
+    from ecstacy.widgets.charts import ProportionChart
+
+    assert resolve_viz("pie") == "proportion"
+    assert isinstance(create_viz("pie"), ProportionChart)
+    assert "pie" not in viz_names()
+    assert "proportion" in viz_names()
+
+
+@pytest.mark.asyncio
+async def test_chart_screen_pie_alias_lands_on_proportion():
+    from textual.app import App
+
+    from ecstacy.core.dataset import DataSet
+    from ecstacy.screens.chart import ChartScreen
+    from ecstacy.widgets.charts import ProportionChart
+
+    class _App(App):
+        def on_mount(self):
+            df = pd.DataFrame({"region": ["us", "eu"], "value": [1, 2]})
+            ds = DataSet.from_dataframe(df, source_id="s", kind="test")
+            self.push_screen(ChartScreen(ds, "pie"))
+
+    app = _App()
+    async with app.run_test() as pilot:
+        for _ in range(6):
+            await pilot.pause()
+        assert app.screen.names[app.screen.index] == "proportion"
+        assert isinstance(app.screen.query_one("#viz-holder").children[0], ProportionChart)
 
 
 @pytest.mark.asyncio

@@ -14,10 +14,18 @@ VIZ_ORDER = [
     "gauge",
     "heatmap",
     "box",
-    "pie",
+    "proportion",
     "summary",
     "json",
 ]
+
+# Backwards-compatible aliases for renamed visualizations. These resolve
+# anywhere a viz name is accepted but are not listed by viz_names().
+_VIZ_ALIASES = {"pie": "proportion"}
+
+
+def resolve_viz(name: str) -> str:
+    return _VIZ_ALIASES.get(name, name)
 
 
 def viz_names() -> list[str]:
@@ -27,7 +35,14 @@ def viz_names() -> list[str]:
 
 
 def create_viz(name: str) -> Widget:
-    return registry.viz.get(name)()
+    return registry.viz.get(resolve_viz(name))()
 
 
-__all__ = ["ColumnMapping", "auto_mapping", "viz_names", "create_viz", "VIZ_ORDER"]
+__all__ = [
+    "ColumnMapping",
+    "auto_mapping",
+    "viz_names",
+    "create_viz",
+    "resolve_viz",
+    "VIZ_ORDER",
+]
