@@ -160,14 +160,15 @@ ecstacy config path
 
 ## Visualizations
 
-table (sortable and searchable), line, bar, histogram, scatter, sparkline,
-gauge, heatmap (correlation matrix), json tree.
+table (sortable, searchable, column picker, export), line, bar, histogram,
+scatter, sparkline, gauge, heatmap (correlation matrix), box plot, pie chart,
+summary card (count/mean/median/std/min/max), json tree.
 
 ## Keys
 
 Home: `o` open, `d` dashboard, `t` theme, `?` help, `q` quit.
-Chart: `n`/`right` next chart, `p`/`left` previous chart, `r` refresh, `t` theme, `esc` back.
-Table: `s` sort by column, `/` focus search, type to filter, `esc` clear.
+Chart: `n`/`right` next chart, `p`/`left` previous chart, `/` query/transform, `r` refresh, `t` theme, `esc` back.
+Table: `s` sort by column, `/` focus search, `c` column picker, `e` export view, type to filter, `esc` clear.
 Dashboard: `m` toggle grid/single layout, `n`/`p` cycle panels, `esc` back.
 
 ## Configuration

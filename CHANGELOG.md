@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-07-29
+
+### Added
+- Table column picker: press `c` to toggle column visibility via a modal.
+- Table multi-column sort: clicking columns builds a multi-column sort
+  list; clicking again toggles ascending/descending.
+- Table row count footer: shows total rows, filtered count when searching,
+  and active sort columns with arrows.
+- Table export: press `e` to export the current filtered/sorted view to
+  a file (CSV/JSON/Markdown) via a path+format modal.
+- Query/transform bar in ChartScreen: press `/` to type a query like
+  `where value > 100 | group_by region | agg mean | limit 10` and apply
+  it live without leaving the TUI.
+- `parse_transform_query()` in transforms.py for parsing pipe-separated
+  query strings into Transform objects.
+- Box plot visualization (distribution per category or single column).
+- Pie/donut chart visualization (proportions by category).
+- Summary statistics card (count, mean, median, std, min, max per column).
+
+### Changed
+- ChartScreen now has a transform bar Input at the top.
+- VIZ_ORDER updated: box, pie, summary added before json.
+
 ## [0.3.0] - 2026-07-28
 
 ### Added
