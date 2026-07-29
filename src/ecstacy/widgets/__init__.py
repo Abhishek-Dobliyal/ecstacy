@@ -13,6 +13,8 @@ VIZ_ORDER = [
     "sparkline",
     "gauge",
     "heatmap",
+    "box",
+    "pie",
     "json",
 ]
 

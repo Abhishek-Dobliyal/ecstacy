@@ -142,6 +142,100 @@ def test_max_chart_points_constant():
 
 
 @pytest.mark.asyncio
+async def test_box_plot_renders_with_category():
+    from textual.app import App
+
+    from ecstacy.core.dataset import DataSet
+    from ecstacy.screens.chart import ChartScreen
+
+    class _App(App):
+        def on_mount(self):
+            df = pd.DataFrame(
+                {"region": ["us", "eu", "us", "eu", "us"], "value": [10, 20, 30, 15, 25]}
+            )
+            ds = DataSet.from_dataframe(df, source_id="s", kind="test")
+            self.push_screen(ChartScreen(ds, "box"))
+
+    async with _App().run_test() as pilot:
+        for _ in range(6):
+            await pilot.pause()
+
+
+@pytest.mark.asyncio
+async def test_box_plot_renders_without_category():
+    from textual.app import App
+
+    from ecstacy.core.dataset import DataSet
+    from ecstacy.screens.chart import ChartScreen
+
+    class _App(App):
+        def on_mount(self):
+            df = pd.DataFrame({"value": [10, 20, 30, 40, 50]})
+            ds = DataSet.from_dataframe(df, source_id="s", kind="test")
+            self.push_screen(ChartScreen(ds, "box"))
+
+    async with _App().run_test() as pilot:
+        for _ in range(6):
+            await pilot.pause()
+
+
+@pytest.mark.asyncio
+async def test_box_plot_no_numeric_column():
+    from textual.app import App
+
+    from ecstacy.core.dataset import DataSet
+    from ecstacy.screens.chart import ChartScreen
+
+    class _App(App):
+        def on_mount(self):
+            df = pd.DataFrame({"region": ["us", "eu"]})
+            ds = DataSet.from_dataframe(df, source_id="s", kind="test")
+            self.push_screen(ChartScreen(ds, "box"))
+
+    async with _App().run_test() as pilot:
+        for _ in range(6):
+            await pilot.pause()
+
+
+@pytest.mark.asyncio
+async def test_pie_chart_renders():
+    from textual.app import App
+
+    from ecstacy.core.dataset import DataSet
+    from ecstacy.screens.chart import ChartScreen
+
+    class _App(App):
+        def on_mount(self):
+            df = pd.DataFrame(
+                {"region": ["us", "eu", "ap"], "value": [100, 50, 25]}
+            )
+            ds = DataSet.from_dataframe(df, source_id="s", kind="test")
+            self.push_screen(ChartScreen(ds, "pie"))
+
+    async with _App().run_test() as pilot:
+        for _ in range(6):
+            await pilot.pause()
+
+
+@pytest.mark.asyncio
+async def test_pie_chart_no_numeric_column():
+    from textual.app import App
+
+    from ecstacy.core.dataset import DataSet
+    from ecstacy.screens.chart import ChartScreen
+
+    class _App(App):
+        def on_mount(self):
+            df = pd.DataFrame({"region": ["us", "eu"]})
+            ds = DataSet.from_dataframe(df, source_id="s", kind="test")
+            self.push_screen(ChartScreen(ds, "pie"))
+
+    async with _App().run_test() as pilot:
+        for _ in range(6):
+            await pilot.pause()
+
+
+@pytest.mark.asyncio
 async def test_chart_screen_transform_bar_filters_data():
     from textual.app import App
 

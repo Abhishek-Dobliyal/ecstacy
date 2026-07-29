@@ -226,3 +226,77 @@ class Heatmap(PlotWidget):
         matrix = numbers.corr().fillna(0.0).round(2).values.tolist()
         plt.matrix_plot(matrix, marker="braille")
         _decorate(plt, "correlation matrix")
+
+
+@registry.viz.register("box")
+class BoxPlot(PlotWidget):
+    viz_name = "box"
+
+    def _draw(self, plt, frame: pd.DataFrame, mapping: ColumnMapping) -> None:
+        value = mapping.value or (mapping.y[0] if mapping.y else None)
+        category = mapping.category or mapping.x
+        if not value:
+            nums = _numeric_columns(frame)
+            value = nums[0] if nums else None
+        if not value:
+            plt.title("box plot needs a numeric column")
+            return
+        if not category or category not in frame.columns:
+            category = None
+        series = numeric(frame[value]).dropna()
+        if series.empty:
+            plt.title(f"no data for {value}")
+            return
+        if category:
+            groups = frame.dropna(subset=[value, category]).groupby(category)[value]
+            palette = _theme_palette(self.app)
+            for i, (cat, group) in enumerate(groups):
+                vals = numeric(group).dropna().tolist()
+                if not vals:
+                    continue
+                color = _hex_rgb(palette[i % len(palette)])
+                plt.boxplot(
+                    {str(cat): vals},
+                    color=color,
+                )
+            _decorate(plt, f"{value} by {category}", ylabel=value)
+        else:
+            plt.boxplot({value: series.tolist()}, color=_hex_rgb(_theme_palette(self.app)[0]))
+            _decorate(plt, f"distribution of {value}", ylabel=value)
+
+
+@registry.viz.register("pie")
+class PieChart(PlotWidget):
+    viz_name = "pie"
+
+    def _draw(self, plt, frame: pd.DataFrame, mapping: ColumnMapping) -> None:
+        category = mapping.category or mapping.x
+        value = mapping.value or (mapping.y[0] if mapping.y else None)
+        if not category:
+            cats = [
+                str(c) for c in frame.columns
+                if frame[c].dtype == "object" or str(frame[c].dtype).startswith("category")
+            ]
+            category = cats[0] if cats else None
+        if not value:
+            nums = _numeric_columns(frame)
+            value = nums[0] if nums else None
+        if not category or not value:
+            plt.title("pie chart needs a category and a numeric column")
+            return
+        work = frame[[category, value]].copy()
+        work[value] = numeric(work[value])
+        work = work.dropna(subset=[category, value])
+        if work.empty:
+            plt.title("pie chart has no data after removing NaNs")
+            return
+        grouped = work.groupby(category)[value].sum().sort_values(ascending=False).head(20)
+        labels = [str(i) for i in grouped.index]
+        values = grouped.tolist()
+        palette = _theme_palette(self.app)
+        colors = [_hex_rgb(palette[i % len(palette)]) for i in range(len(labels))]
+        try:
+            plt.pie(values, labels=labels, colors=colors)
+        except Exception:
+            plt.bar(labels, values, orientation="vertical", color=colors, marker="braille")
+        _decorate(plt, f"{value} by {category}")
