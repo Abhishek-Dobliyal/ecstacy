@@ -39,7 +39,7 @@ class SocketSource(Source):
     def describe(self) -> str:
         return f"socket:{self.url}"
 
-    def fetch(self) -> DataSet:
+    def fetch(self, keep_raw: bool = False) -> DataSet:
         try:
             records = asyncio.run(self._collect())
         except Exception as exc:
@@ -50,10 +50,10 @@ class SocketSource(Source):
             raise SourceError(f"no messages received from {self.url}", source_id=self.id)
         frame = _records_to_frame(records)
         return DataSet.from_dataframe(
-            frame, source_id=self.id, kind=self.kind, raw=records
+            frame, source_id=self.id, kind=self.kind, raw=records if keep_raw else None
         )
 
-    async def stream(self) -> AsyncIterator[DataSet]:
+    async def stream(self, keep_raw: bool = False) -> AsyncIterator[DataSet]:
         import orjson
         import websockets
 
@@ -73,7 +73,7 @@ class SocketSource(Source):
                                 _records_to_frame(records),
                                 source_id=self.id,
                                 kind=self.kind,
-                                raw=list(records),
+                                raw=list(records) if keep_raw else None,
                             )
                             records.clear()
                         continue
@@ -85,7 +85,7 @@ class SocketSource(Source):
                             _records_to_frame(records),
                             source_id=self.id,
                             kind=self.kind,
-                            raw=list(records),
+                            raw=list(records) if keep_raw else None,
                         )
                         records.clear()
         except Exception as exc:

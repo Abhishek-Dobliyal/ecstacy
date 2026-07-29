@@ -42,7 +42,7 @@ class SqlSource(Source):
             self._conn.close()
             self._conn = None
 
-    def fetch(self) -> DataSet:
+    def fetch(self, keep_raw: bool = False) -> DataSet:
         connection = self._get_connection()
         try:
             frame = connection.execute(self.query).df()

@@ -165,10 +165,10 @@ async def test_streaming_source_updates_dataset(monkeypatch):
         kind = "socket"
         supports_stream = True
 
-        def fetch(self):
+        def fetch(self, keep_raw: bool = False):
             raise NotImplementedError
 
-        async def stream(self):
+        async def stream(self, keep_raw: bool = False):
             for value in (1, 2):
                 yield DataSet.from_dataframe(
                     pd.DataFrame({"v": [value]}), source_id="s", kind="socket"

@@ -98,3 +98,81 @@ def test_line_downsample_under_budget(benchmark):
     assert len(result) == MAX_CHART_POINTS
     # Target: <= 50 ms after downsample (the tail() + tolist() hot path).
     assert benchmark.stats.stats.mean <= 0.050
+
+
+def _write_json(tmp_path: Path, rows: int) -> Path:
+    import orjson
+
+    path = tmp_path / "big.json"
+    records = [
+        {"timestamp": f"2024-01-01T00:00:{i:02d}", "region": "us", "value": float(i)}
+        for i in range(rows)
+    ]
+    path.write_bytes(orjson.dumps(records))
+    return path
+
+
+@pytest.mark.benchmark
+def test_json_load_within_budget(tmp_path, benchmark):
+    rows = 100_000
+    path = _write_json(tmp_path, rows)
+
+    def load():
+        return create_source(
+            SourceSpec(kind="file", id=path.name, params={"path": str(path)})
+        ).fetch()
+
+    result = benchmark.pedantic(load, iterations=1, rounds=3, warmup_rounds=1)
+    assert result.meta.rows == rows
+    # DuckDB read_json_auto should be faster than orjson + json_normalize.
+    # Budget: <= 2x raw pd.read_json on the same file.
+    import time
+
+    times = []
+    for _ in range(3):
+        start = time.perf_counter()
+        pd.read_json(path)
+        times.append(time.perf_counter() - start)
+    baseline = sum(times) / len(times)
+    ratio = benchmark.stats.stats.mean / baseline
+    assert ratio <= 2.0, f"json load is {ratio:.2f}x raw pd.read_json (budget 2.0x)"
+
+
+def _write_parquet(tmp_path: Path, rows: int) -> Path:
+    path = tmp_path / "big.parquet"
+    pd.DataFrame(
+        {
+            "timestamp": pd.date_range("2024-01-01", periods=rows, freq="s"),
+            "region": pd.array(["us", "eu", "apac", "latam"] * (rows // 4 + 1))[:rows],
+            "value": pd.array([float(i) for i in range(rows)]),
+        }
+    ).to_parquet(path, index=False)
+    return path
+
+
+@pytest.mark.benchmark
+def test_parquet_load_within_budget(tmp_path, benchmark):
+    rows = 1_000_000
+    path = _write_parquet(tmp_path, rows)
+
+    def load():
+        return create_source(
+            SourceSpec(kind="file", id=path.name, params={"path": str(path)})
+        ).fetch()
+
+    result = benchmark.pedantic(load, iterations=1, rounds=3, warmup_rounds=1)
+    assert result.meta.rows == rows
+    # DuckDB parquet reader vs raw pd.read_parquet. DuckDB's Arrow-to-pandas
+    # conversion adds overhead vs pandas' direct Arrow path, so budget is
+    # generous at 5x. The win is in the unified code path + LIMIT pushdown,
+    # not raw parquet speed.
+    import time
+
+    times = []
+    for _ in range(3):
+        start = time.perf_counter()
+        pd.read_parquet(path)
+        times.append(time.perf_counter() - start)
+    baseline = sum(times) / len(times)
+    ratio = benchmark.stats.stats.mean / baseline
+    assert ratio <= 5.0, f"parquet load is {ratio:.2f}x raw pd.read_parquet (budget 5.0x)"

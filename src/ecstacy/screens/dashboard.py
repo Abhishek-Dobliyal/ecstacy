@@ -117,9 +117,18 @@ class DashboardScreen(Screen):
         self._jobs = []
 
     def _start_scheduler(self) -> None:
+        from ecstacy.widgets import resolve_viz
+
         self._stop_scheduler()
         interval = self._parse_refresh_interval()
         self._scheduler = Scheduler(self.app, is_active=lambda: self.app.screen is self)
+        # Precompute which sources need the raw payload (only if a panel
+        # using the json-tree viz references them).
+        json_sources = {
+            panel.source
+            for panel in self.dashboard.panels
+            if resolve_viz(panel.viz) == "json"
+        }
         for spec in self.dashboard.sources:
             enriched = self._with_max_rows(spec)
             try:
@@ -136,6 +145,7 @@ class DashboardScreen(Screen):
                 interval=interval,
                 on_data=self._on_data(spec.id),
                 on_error=self._on_error(spec.id),
+                keep_raw=spec.id in json_sources,
             )
             self._jobs.append(job)
             self._scheduler.add(job)

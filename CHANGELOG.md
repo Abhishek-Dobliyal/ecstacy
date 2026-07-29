@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] - 2026-07-29
+
+### Added
+- DuckDB universal reader: CSV, TSV, Parquet, JSON, and NDJSON files are
+  now read through DuckDB's native C++/Rust parsers with `LIMIT` pushdown
+  and automatic type inference (including TIMESTAMP/DATE). Excel, log,
+  and stdin remain on their existing pandas paths.
+- `keep_raw` parameter on `Source.fetch()`: the JSON-tree viz's raw
+  payload is only retained when the json viz is actually selected,
+  cutting peak memory from O(file size) to O(rows returned) for JSON
+  sources in the common case. Threaded from `app.py` (single-source) and
+  `dashboard.py` (per-source, precomputed from panel viz names).
+- JSON/Parquet load benchmarks in `tests/benchmarks/`.
+
+### Changed
+- CSV 1M-row load: ~868 ms -> ~391 ms (2.2x faster, measured via
+  `scripts/profile_load.py`). The 192 ms date-parsing cost drops to
+  ~22 ms because DuckDB infers TIMESTAMP natively.
+- Duplicate-column naming changed from `value.1` (pandas convention) to
+  `value_1` (DuckDB convention), matching `deduplicate_columns`'s
+  existing `_1` suffix.
+
 ## [0.7.0] - 2026-07-29
 
 ### Added

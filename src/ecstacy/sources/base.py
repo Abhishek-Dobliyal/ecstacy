@@ -30,7 +30,7 @@ class Source(ABC):
         self.id = id
 
     @abstractmethod
-    def fetch(self) -> DataSet:
+    def fetch(self, keep_raw: bool = False) -> DataSet:
         ...
 
     def describe(self) -> str:

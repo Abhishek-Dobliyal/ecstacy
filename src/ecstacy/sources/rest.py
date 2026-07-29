@@ -44,7 +44,7 @@ class RestSource(Source):
             self._client.close()
             self._client = None
 
-    def fetch(self) -> DataSet:
+    def fetch(self, keep_raw: bool = False) -> DataSet:
         if self._client is None:
             self._client = httpx.Client(timeout=self.timeout)
         try:
@@ -71,7 +71,12 @@ class RestSource(Source):
         frame = _to_frame(records)
         if self.max_rows is not None:
             frame = frame.head(self.max_rows)
-        return DataSet.from_dataframe(frame, source_id=self.id, kind=self.kind, raw=raw)
+        return DataSet.from_dataframe(
+            frame,
+            source_id=self.id,
+            kind=self.kind,
+            raw=raw if keep_raw else None,
+        )
 
 
 def _dig(payload: Any, path: str | None) -> Any:

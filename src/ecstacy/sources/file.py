@@ -5,6 +5,7 @@ from itertools import islice
 from pathlib import Path
 from typing import Any
 
+import duckdb
 import orjson
 import pandas as pd
 from pandas.api import types as pdt
@@ -28,6 +29,8 @@ _READERS = {
 }
 
 _STDIN_SENTINEL = "-"
+
+_DUCKDB_FORMATS = {"csv", "tsv", "parquet", "json", "ndjson"}
 
 
 @registry.sources.register("file")
@@ -75,23 +78,15 @@ class FileSource(Source):
                 frame[name] = pd.to_datetime(frame[name], errors="coerce")
         return frame
 
-    def fetch(self) -> DataSet:
+    def fetch(self, keep_raw: bool = False) -> DataSet:
         if self.is_stdin:
-            return self._fetch_stdin()
+            return self._fetch_stdin(keep_raw=keep_raw)
         if not self.path.exists():
             raise SourceError(f"no such file: {self.path}", source_id=self.id)
         raw: Any = None
         try:
-            if self.fmt == "csv":
-                frame = pd.read_csv(self.path, nrows=self.max_rows)
-            elif self.fmt == "tsv":
-                frame = pd.read_csv(self.path, sep="\t", nrows=self.max_rows)
-            elif self.fmt == "parquet":
-                frame = _read_parquet(self.path, self.max_rows)
-            elif self.fmt == "ndjson":
-                frame = pd.read_json(self.path, lines=True, nrows=self.max_rows)
-            elif self.fmt == "json":
-                frame, raw = _read_json(self.path, self.max_rows)
+            if self.fmt in _DUCKDB_FORMATS:
+                frame, raw = _read_duckdb(self.path, self.fmt, self.max_rows, keep_raw)
             elif self.fmt == "excel":
                 frame = _read_excel(self.path, self.sheet, self.max_rows)
             elif self.fmt == "log":
@@ -114,7 +109,7 @@ class FileSource(Source):
         frame = self._parse_dates(frame)
         return DataSet.from_dataframe(frame, source_id=self.id, kind=self.kind, raw=raw)
 
-    def _fetch_stdin(self) -> DataSet:
+    def _fetch_stdin(self, keep_raw: bool = False) -> DataSet:
         raw: Any = None
         try:
             if self.fmt == "csv":
@@ -153,23 +148,73 @@ class FileSource(Source):
             ) from exc
         if self.max_rows is not None:
             frame = frame.head(self.max_rows)
+        if self.fmt == "json" and not keep_raw:
+            raw = None
         frame = _deduplicate_columns(frame)
         frame = self._parse_dates(frame)
         return DataSet.from_dataframe(frame, source_id=self.id, kind=self.kind, raw=raw)
 
 
-def _read_parquet(path: Path, max_rows: int | None) -> pd.DataFrame:
-    if max_rows is None:
-        return pd.read_parquet(path)
-    import pyarrow.parquet as pq
+def _read_duckdb(
+    path: Path, fmt: str, max_rows: int | None, keep_raw: bool = False
+) -> tuple[pd.DataFrame, Any]:
+    """Universal reader: pushes LIMIT + type inference into DuckDB's native
+    C++/Rust parsers. Handles csv, tsv, parquet, json, ndjson.
 
-    # stream the first batch only: memory stays O(max_rows) not O(file size)
-    for batch in pq.ParquetFile(path).iter_batches(batch_size=max_rows):
-        return batch.to_pandas().head(max_rows)
-    return pd.read_parquet(path)  # 0-row file: keep the schema
+    Returns ``(frame, raw)`` where ``raw`` is the parsed JSON payload for
+    the ``json`` format when ``keep_raw`` is set, or ``None`` otherwise.
+    """
+    limit = f" LIMIT {max_rows}" if max_rows is not None else ""
+    path_str = str(path).replace("'", "''")
+    if fmt == "csv":
+        query = f"SELECT * FROM read_csv_auto('{path_str}'){limit}"
+    elif fmt == "tsv":
+        query = f"SELECT * FROM read_csv_auto('{path_str}', delim='\\t'){limit}"
+    elif fmt == "parquet":
+        query = f"SELECT * FROM '{path_str}'{limit}"
+    elif fmt == "json":
+        query = f"SELECT * FROM read_json_auto('{path_str}'){limit}"
+    elif fmt == "ndjson":
+        query = f"SELECT * FROM read_json_auto('{path_str}', format='newline_delimited'){limit}"
+    else:
+        raise ValueError(f"unsupported DuckDB format: {fmt}")
+    conn = duckdb.connect()
+    try:
+        frame = conn.sql(query).df()
+    finally:
+        conn.close()
+    # DuckDB returns a dummy ``column0`` for a zero-byte file instead of
+    # raising EmptyDataError like pandas did. Normalize to the old behavior
+    # so the caller raises a SourceError.
+    if frame.empty and list(frame.columns) == ["column0"]:
+        raise pd.errors.EmptyDataError(str(path))
+    # JSON envelopes like {"data": [...]} arrive as a single-row, single-
+    # column frame whose value is a list of structs. Unnest it into a flat
+    # frame so downstream code sees the records, matching the old orjson +
+    # json_normalize heuristic.
+    raw: Any = None
+    if fmt == "json":
+        if _looks_like_envelope(frame):
+            frame = _unnest_json_envelope(path, max_rows)
+        if keep_raw:
+            raw = orjson.loads(path.read_bytes())
+    return frame, raw
 
 
-def _read_json(path: Path, max_rows: int | None = None) -> tuple[pd.DataFrame, Any]:
+def _looks_like_envelope(frame: pd.DataFrame) -> bool:
+    """True when a JSON frame is a single row with a single column whose
+    value is a numpy array / list of dicts (i.e. an unwrapped envelope)."""
+    if len(frame) != 1 or len(frame.columns) != 1:
+        return False
+    val = frame.iloc[0, 0]
+    return isinstance(val, (list,)) or (
+        hasattr(val, "__iter__") and not isinstance(val, (str, bytes, dict))
+    )
+
+
+def _unnest_json_envelope(path: Path, max_rows: int | None) -> pd.DataFrame:
+    """Unnest a JSON envelope (e.g. {"data": [...]}) by picking the first
+    list-valued top-level field, expanding each element into a row."""
     raw = orjson.loads(path.read_bytes())
     records = raw
     if isinstance(raw, dict):
@@ -177,7 +222,7 @@ def _read_json(path: Path, max_rows: int | None = None) -> tuple[pd.DataFrame, A
     frame = pd.json_normalize(records)
     if max_rows is not None:
         frame = frame.head(max_rows)
-    return frame, raw
+    return frame
 
 
 def _read_log(path: Path, max_rows: int | None = None) -> pd.DataFrame:

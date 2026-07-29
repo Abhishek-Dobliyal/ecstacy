@@ -95,6 +95,8 @@ class ChartScreen(Screen):
         self._job = None
 
     def _start_refresh(self) -> None:
+        from ecstacy.widgets import resolve_viz
+
         self._stop_refresh()
         if self.spec is None:
             return
@@ -105,8 +107,9 @@ class ChartScreen(Screen):
             return
         if getattr(source, "is_stdin", False):
             return  # re-reading stdin would hit EOF or block on a live pipe
+        keep_raw = resolve_viz(self.names[self.index]) == "json"
         if getattr(source, "supports_stream", False):
-            self._start_stream(source)
+            self._start_stream(source, keep_raw=keep_raw)
             return
         self._scheduler = Scheduler(self.app, is_active=lambda: self.app.screen is self)
         self._job = Job(
@@ -114,17 +117,20 @@ class ChartScreen(Screen):
             interval=self.refresh_interval,
             on_data=self._on_refresh_data,
             on_error=self._on_refresh_error,
+            keep_raw=keep_raw,
         )
         # data is already fresh from the initial fetch; don't refetch at t=0
         self._scheduler.add(self._job, run_immediately=False)
 
-    def _start_stream(self, source: Source) -> None:
+    def _start_stream(self, source: Source, keep_raw: bool = False) -> None:
         self._stream_worker = self.run_worker(
-            self._consume_stream(source), exclusive=True, exit_on_error=False
+            self._consume_stream(source, keep_raw=keep_raw),
+            exclusive=True,
+            exit_on_error=False,
         )
 
-    async def _consume_stream(self, source: Source) -> None:
-        stream = source.stream()
+    async def _consume_stream(self, source: Source, keep_raw: bool = False) -> None:
+        stream = source.stream(keep_raw=keep_raw)
         try:
             async for dataset in stream:
                 self._on_refresh_data(dataset)

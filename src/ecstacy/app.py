@@ -102,10 +102,13 @@ class EcstacyApp(App):
     def _fetch_and_show(
         self, spec: SourceSpec, viz: str, mapping: ColumnMapping | None
     ) -> None:
+        from ecstacy.widgets import resolve_viz
+
+        keep_raw = resolve_viz(viz) == "json"
         key = (spec.kind, spec.id)
         try:
             source = create_source(spec)
-            dataset = source.fetch()
+            dataset = source.fetch(keep_raw=keep_raw)
         except SourceError as error:
             self._deliver(
                 self._open_failed,

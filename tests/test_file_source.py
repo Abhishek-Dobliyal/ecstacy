@@ -79,7 +79,7 @@ def test_file_source_duplicate_columns(duplicate_csv):
     spec = SourceSpec(kind="file", id="dup", params={"path": str(duplicate_csv)})
     dataset = create_source(spec).fetch()
     assert "value" in dataset.frame.columns
-    assert "value.1" in dataset.frame.columns
+    assert "value_1" in dataset.frame.columns
 
 
 def test_file_source_auto_detects_format(sample_json):
@@ -247,3 +247,60 @@ def test_file_source_xlsx_sheet_by_digit_string(sample_xlsx):
     )
     dataset = create_source(spec).fetch()
     assert dataset.meta.rows == 4
+
+
+def test_file_source_duckdb_csv_returns_datetime_columns(sample_csv):
+    """DuckDB infers TIMESTAMP natively — date column should arrive as datetime64."""
+    spec = SourceSpec(kind="file", id="sample", params={"path": str(sample_csv)})
+    dataset = create_source(spec).fetch()
+    assert pd.api.types.is_datetime64_any_dtype(dataset.frame["date"])
+
+
+def test_file_source_duckdb_tsv(tmp_path):
+    tsv = tmp_path / "data.tsv"
+    tsv.write_text("a\tb\n1\tx\n2\ty\n")
+    spec = SourceSpec(kind="file", id="tsv", params={"path": str(tsv)})
+    dataset = create_source(spec).fetch()
+    assert dataset.meta.rows == 2
+    assert list(dataset.frame.columns) == ["a", "b"]
+
+
+def test_file_source_duckdb_max_rows_limit_pushdown(sample_csv):
+    spec = SourceSpec(
+        kind="file", id="sample", params={"path": str(sample_csv), "max_rows": 2}
+    )
+    dataset = create_source(spec).fetch()
+    assert dataset.meta.rows == 2
+
+
+def test_file_source_keep_raw_false_for_csv(sample_csv):
+    """Non-JSON formats never carry raw; keep_raw has no effect."""
+    spec = SourceSpec(kind="file", id="sample", params={"path": str(sample_csv)})
+    dataset = create_source(spec).fetch()
+    assert dataset.meta.raw is None
+
+
+def test_file_source_keep_raw_false_for_json(sample_json):
+    """JSON with keep_raw=False (default) should not retain the raw payload."""
+    spec = SourceSpec(kind="file", id="sample", params={"path": str(sample_json)})
+    dataset = create_source(spec).fetch()
+    assert dataset.meta.raw is None
+
+
+def test_file_source_keep_raw_true_for_json(sample_json):
+    """JSON with keep_raw=True should retain the parsed JSON payload."""
+    spec = SourceSpec(kind="file", id="sample", params={"path": str(sample_json)})
+    dataset = create_source(spec).fetch(keep_raw=True)
+    assert dataset.meta.raw is not None
+
+
+def test_file_source_duckdb_json_envelope(tmp_path):
+    """DuckDB read_json_auto handles {\"data\": [...]} envelopes."""
+    import orjson
+
+    path = tmp_path / "envelope.json"
+    path.write_bytes(orjson.dumps({"data": [{"a": 1, "b": "x"}, {"a": 2, "b": "y"}]}))
+    spec = SourceSpec(kind="file", id="env", params={"path": str(path)})
+    dataset = create_source(spec).fetch()
+    assert dataset.meta.rows == 2
+    assert "a" in dataset.frame.columns
