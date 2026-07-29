@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-07-29
+
+### Added
+- Viz widget pooling: `ChartScreen` now lazily creates and pools each viz
+  widget on first visit, then reuses it on subsequent `n`/`p` cycles via
+  `display` toggle instead of unmounting and re-mounting. Eliminates the
+  CSS cascade + layout + focus bookkeeping cost on every viz switch.
+
+### Fixed
+- The transform/query bar (`ctrl+f`) and the table search bar (`/`) no
+  longer have a decorative round border. The border consumed both rows of
+  the `height: 1` allocation, leaving zero visible content rows — typed
+  text and the cursor were invisible even though the inputs worked.
+
 ## [0.8.0] - 2026-07-29
 
 ### Added

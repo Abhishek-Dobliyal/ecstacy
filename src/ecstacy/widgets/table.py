@@ -27,7 +27,6 @@ class TableView(Vertical):
     TableView #table-search {
         height: 1;
         margin: 0 0 0 0;
-        border: round $accent;
         padding: 0 1;
     }
     TableView #table-data {

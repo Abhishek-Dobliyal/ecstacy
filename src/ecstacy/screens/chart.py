@@ -25,7 +25,6 @@ class ChartScreen(Screen):
     ChartScreen #transform-bar {
         height: 1;
         margin: 0 0 0 0;
-        border: round $accent;
         padding: 0 1;
     }
     ChartScreen #viz-holder {
@@ -65,6 +64,8 @@ class ChartScreen(Screen):
         self._transform_query = ""
         self._transform_cache: DataSet | None = None
         self._transform_cache_key: tuple[int, str] | None = None
+        self._viz_pool: dict[str, Widget] = {}
+        self._active_widget: Widget | None = None
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -156,8 +157,7 @@ class ChartScreen(Screen):
         self.notify(msg, severity="error")
 
     async def _update_current_widget(self) -> None:
-        holder = self.query_one("#viz-holder", Container)
-        widget = holder.children[0] if holder.children else None
+        widget = self._active_widget
         dataset = self._get_transformed_dataset()
         if widget is not None and hasattr(widget, "set_data"):
             widget.set_data(dataset, self.mapping)
@@ -240,10 +240,20 @@ class ChartScreen(Screen):
 
     async def _render_current(self) -> None:
         holder = self.query_one("#viz-holder", Container)
-        await holder.remove_children()
         name = self.names[self.index]
-        widget = create_viz(name)
-        await holder.mount(widget)
+        # Hide the currently active widget before showing the new one.
+        if self._active_widget is not None:
+            self._active_widget.display = False
+        # Lazily create and pool widgets; reuse on subsequent visits so
+        # we avoid the mount/unmount cost on every n/p cycle.
+        if name not in self._viz_pool:
+            widget = create_viz(name)
+            await holder.mount(widget)
+            self._viz_pool[name] = widget
+        else:
+            widget = self._viz_pool[name]
+            widget.display = True
+        self._active_widget = widget
         dataset = self._get_transformed_dataset()
         widget.set_data(dataset, self.mapping)
         self._update_border(dataset)

@@ -115,7 +115,7 @@ async def test_box_proportion_heatmap_render_without_errors():
             while screen.index != idx:
                 await screen.action_next_viz()
             await _settle(pilot)
-            widget = screen.query_one("#viz-holder").children[0]
+            widget = screen._active_widget
             rendered = widget.plt.build()
             assert "cannot render" not in rendered, f"{viz} failed to render"
             assert rendered.strip(), f"{viz} rendered empty output"
@@ -127,6 +127,49 @@ def test_transform_query_bound_to_ctrl_f():
     keys = [binding[0] for binding in ChartScreen.BINDINGS]
     assert "ctrl+f" in keys
     assert "slash" not in keys
+
+
+@pytest.mark.asyncio
+async def test_viz_switch_does_not_remount_widget():
+    """Cycling n then p back to the same viz reuses the pooled widget."""
+    app = _make_app()
+    async with app.run_test() as pilot:
+        await _settle(pilot)
+        screen = app.screen
+        table_widget = screen._active_widget
+        await pilot.press("n")  # line
+        await _settle(pilot)
+        await pilot.press("p")  # back to table
+        await _settle(pilot)
+        assert screen._active_widget is table_widget
+
+
+@pytest.mark.asyncio
+async def test_pooled_hidden_widget_display_none():
+    """After switching away from a viz, its pooled widget is hidden."""
+    app = _make_app()
+    async with app.run_test() as pilot:
+        await _settle(pilot)
+        screen = app.screen
+        table_widget = screen._active_widget
+        await pilot.press("n")  # line
+        await _settle(pilot)
+        assert table_widget.display is False
+        assert screen._active_widget.display is True
+
+
+@pytest.mark.asyncio
+async def test_transform_submit_reuses_widget():
+    """Submitting a transform query does not remount the active widget."""
+    app = _make_app()
+    async with app.run_test() as pilot:
+        await _settle(pilot)
+        screen = app.screen
+        table_widget = screen._active_widget
+        screen._transform_query = "where value > 1"
+        await screen._render_current()
+        await _settle(pilot)
+        assert screen._active_widget is table_widget
 
 
 @pytest.mark.asyncio
