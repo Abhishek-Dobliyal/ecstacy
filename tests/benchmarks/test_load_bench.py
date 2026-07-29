@@ -85,18 +85,20 @@ def test_filter_transform_100k(tmp_path, benchmark):
 
 @pytest.mark.benchmark
 def test_line_downsample_under_budget(benchmark):
-    from ecstacy.widgets.base import numeric
-    from ecstacy.widgets.charts import MAX_CHART_POINTS
+    import numpy as np
 
-    series = pd.Series(range(1_000_000), dtype="float64")
+    from ecstacy.widgets.charts import _lttb
+
+    x = np.arange(1_000_000, dtype=float)
+    y = np.sin(x / 10000) + np.random.rand(1_000_000) * 0.1
 
     def downsample():
-        work = series.tail(MAX_CHART_POINTS)
-        return numeric(work).tolist()
+        _, sy = _lttb(x, y, 1000)
+        return sy.tolist()
 
     result = benchmark.pedantic(downsample, iterations=1, rounds=10, warmup_rounds=1)
-    assert len(result) == MAX_CHART_POINTS
-    # Target: <= 50 ms after downsample (the tail() + tolist() hot path).
+    assert len(result) == 1000
+    # Target: <= 50 ms for 1M → 1000 LTTB downsample
     assert benchmark.stats.stats.mean <= 0.050
 
 

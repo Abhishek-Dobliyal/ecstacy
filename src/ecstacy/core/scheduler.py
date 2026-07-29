@@ -18,6 +18,7 @@ class Job:
     interval: float
     on_data: Callable[[DataSet], None]
     on_error: Callable[[Exception], None]
+    keep_raw: bool = False
     in_flight: bool = field(default=False, init=False)
 
 
@@ -51,6 +52,9 @@ class Scheduler:
         if self._is_active is not None and not self._is_active():
             return
         job.in_flight = True
+        # Prune finished workers so the list doesn't grow unbounded over a
+        # long refresh session.
+        self._workers = [w for w in self._workers if not w.is_finished]
         worker = self._app.run_worker(
             lambda: self._fetch(job),
             thread=True,
@@ -61,7 +65,7 @@ class Scheduler:
 
     def _fetch(self, job: Job) -> None:
         try:
-            dataset = job.source.fetch()
+            dataset = job.source.fetch(keep_raw=job.keep_raw)
         except Exception as error:  # surfaced to the UI, never crashes the loop
             self._deliver(job.on_error, error)
         else:

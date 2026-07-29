@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-07-29
+
+### Added
+- LTTB (Largest-Triangle-Three-Buckets) downsampling for line and scatter
+  charts: preserves peaks and valleys that `tail()` silently dropped, at
+  ~20 ms for 1M → 1000 points (numpy, no new deps).
+- Terminal-budget downsampling: the point cap is now `2× widget width`
+  clamped to [200, 2000] instead of a fixed 1000, so render cost is
+  O(terminal size), fully decoupled from data size. Falls back to 1000
+  before the widget is sized.
+- Render-data cache on `PlotWidget`: the prepared plot payload (downsampled
+  series, groupby results, correlation matrix) is cached keyed on
+  `(dataset identity, mapping, budget)`. Theme toggles re-paint from the
+  cache without recomputing the series.
+- Worker-thread `_prepare` / `_paint` split: every `PlotWidget` subclass
+  runs its pandas/numpy prep (`dropna`, `groupby`, `corr`, LTTB) on a
+  worker thread, leaving only plotext rasterization on the UI thread. A
+  generation counter discards stale results from cancelled workers.
+
+### Changed
+- `PlotWidget` rendering is split into `_prepare(frame, mapping, budget)`
+  (pure computation, off-thread) and `_paint(plt, payload, theme)` (plotext
+  + colors, UI thread). Subclasses must implement both instead of `_draw`.
+- Theme toggle (`t`) is now a repaint, not a recompute: the cached render
+  payload is re-painted with new theme colors without re-running the
+  pandas/numpy pipeline.
+- Downsample ordering fix: `tail(budget)` now runs *before* `dropna` /
+  `to_numeric` in line, scatter, histogram, and sparkline, so NaN-removal
+  and type coercion run on ≤budget rows instead of the full frame.
+- `TableView.set_data` no longer discards the user's sort order and hidden
+  columns on every refresh tick — they are preserved when the column set
+  is unchanged, and reset only when the schema changes.
+- `TableView` string-frame cache is no longer busted unconditionally in
+  `set_data`; it invalidates naturally when the frame object changes (as
+  on a refresh tick).
+- `Scheduler` prunes finished workers from its internal list on each tick,
+  preventing unbounded growth over long refresh sessions.
+
 ## [0.7.1] - 2026-07-29
 
 ### Added
