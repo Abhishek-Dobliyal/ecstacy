@@ -1,6 +1,40 @@
-# Ecstacy
+<p align="center">
+  <img src="assets/logo.png" alt="Ecstacy" width="200">
+</p>
 
-Beautiful data, right in your terminal.
+<h1 align="center">Ecstacy</h1>
+
+<p align="center">
+  <em>Beautiful data, right in your terminal.</em>
+</p>
+
+<p align="center">
+  <a href="https://github.com/Abhishek-Dobliyal/ecstacy/actions/workflows/ci.yml">
+    <img src="https://img.shields.io/github/actions/workflow/status/Abhishek-Dobliyal/ecstacy/ci.yml?label=CI" alt="CI">
+  </a>
+  <a href="https://pypi.org/project/ecstacy-tui/">
+    <img src="https://img.shields.io/pypi/v/ecstacy-tui" alt="PyPI version">
+  </a>
+  <a href="https://pepy.tech/projects/ecstacy-tui">
+    <img src="https://img.shields.io/pypi/dm/ecstacy-tui?label=downloads" alt="Downloads">
+  </a>
+  <a href="https://pypi.org/project/ecstacy-tui/">
+    <img src="https://img.shields.io/pypi/pyversions/ecstacy-tui" alt="Python versions">
+  </a>
+  <a href="LICENSE">
+    <img src="https://img.shields.io/github/license/Abhishek-Dobliyal/ecstacy" alt="License">
+  </a>
+  <a href="https://github.com/Abhishek-Dobliyal/ecstacy/stargazers">
+    <img src="https://img.shields.io/github/stars/Abhishek-Dobliyal/ecstacy?style=social" alt="Stars">
+  </a>
+  <a href="https://github.com/Abhishek-Dobliyal/ecstacy/forks">
+    <img src="https://img.shields.io/github/forks/Abhishek-Dobliyal/ecstacy?style=social" alt="Forks">
+  </a>
+  <img src="https://img.shields.io/badge/code%20style-ruff-000000" alt="Code style: ruff">
+  <a href="https://textual.textualize.io/">
+    <img src="https://img.shields.io/badge/made%20with-Textual-8A2BE2" alt="Made with Textual">
+  </a>
+</p>
 
 Ecstacy is a Textual TUI for visualizing data from local files, REST endpoints,
 SQL, and WebSockets -- with charts, tables, sparklines, gauges, heatmaps and a
