@@ -18,6 +18,7 @@ class TableView(Vertical):
         ("slash", "focus_search", "Search"),
         ("s", "sort_prompt", "Sort"),
         ("c", "column_picker", "Columns"),
+        ("e", "export_view", "Export"),
     ]
     DEFAULT_CSS = """
     TableView {
@@ -78,6 +79,43 @@ class TableView(Vertical):
             ColumnPickerScreen(columns, set(self._hidden_columns)),
             self._on_columns_picked,
         )
+
+    def action_export_view(self) -> None:
+        from ecstacy.screens.modals import ExportScreen
+
+        self.app.push_screen(ExportScreen(), self._on_export_picked)
+
+    def _on_export_picked(self, result: tuple[str, str] | None) -> None:
+        if result is None:
+            return
+        path, fmt = result
+        self._export_to_file(path, fmt)
+
+    def _export_to_file(self, path: str, fmt: str) -> None:
+
+        frame = self._get_current_view()
+        try:
+            if fmt == "csv":
+                frame.to_csv(path, index=False)
+            elif fmt == "json":
+                frame.to_json(path, orient="records", indent=2, date_format="iso")
+            elif fmt == "markdown":
+                frame.to_markdown(path, index=False)
+            else:
+                self.notify(f"unknown format: {fmt}", severity="error")
+                return
+        except Exception as exc:
+            self.notify(f"export failed: {exc}", severity="error")
+            return
+        self.notify(f"exported {len(frame)} rows to {path}")
+
+    def _get_current_view(self) -> pd.DataFrame:
+        frame = self._frame
+        all_columns = [str(c) for c in frame.columns]
+        visible_columns = [c for c in all_columns if c not in self._hidden_columns]
+        work = sort_frame_multi(frame, self._sort_cols)
+        work = filter_frame(work, self._search_value)
+        return work[visible_columns]
 
     def _on_columns_picked(self, hidden: set[str]) -> None:
         self._hidden_columns = hidden

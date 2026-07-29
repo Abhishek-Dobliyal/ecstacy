@@ -92,6 +92,29 @@ def test_sort_frame_multi_missing_column_ignored():
     assert list(result["value"]) == [8.0, 10.0, 12.0, 15.0]
 
 
+def test_table_get_current_view_applies_sort_and_filter():
+    from ecstacy.widgets.table import TableView
+
+    tv = TableView()
+    tv._frame = _sample()
+    tv._sort_cols = [("value", False)]
+    tv._search_value = "us"
+    view = tv._get_current_view()
+    assert list(view["value"]) == [12.0, 10.0]
+    assert "region" in view.columns
+
+
+def test_table_get_current_view_respects_hidden_columns():
+    from ecstacy.widgets.table import TableView
+
+    tv = TableView()
+    tv._frame = _sample()
+    tv._hidden_columns = {"count"}
+    view = tv._get_current_view()
+    assert "count" not in view.columns
+    assert "value" in view.columns
+
+
 @pytest.mark.asyncio
 async def test_table_column_picker_hides_columns():
     from textual.app import App
