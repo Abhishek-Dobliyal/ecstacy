@@ -104,6 +104,25 @@ def test_file_source_log_limits_rows(tmp_path):
     )
     dataset = create_source(spec).fetch()
     assert dataset.meta.rows == 3
+    assert list(dataset.frame["line"]) == ["line1", "line2", "line3"]
+    assert list(dataset.frame["line_no"]) == [1, 2, 3]
+
+
+def test_file_source_log_reads_all_lines(tmp_path):
+    log_file = tmp_path / "test.log"
+    log_file.write_text("line1\nline2\nline3")
+    spec = SourceSpec(kind="file", id="log", params={"path": str(log_file)})
+    dataset = create_source(spec).fetch()
+    assert dataset.meta.rows == 3
+    assert list(dataset.frame["line"]) == ["line1", "line2", "line3"]
+
+
+def test_file_source_log_crlf_endings(tmp_path):
+    log_file = tmp_path / "test.log"
+    log_file.write_bytes(b"line1\r\nline2\r\nline3\r\n")
+    spec = SourceSpec(kind="file", id="log", params={"path": str(log_file)})
+    dataset = create_source(spec).fetch()
+    assert list(dataset.frame["line"]) == ["line1", "line2", "line3"]
 
 
 def test_file_source_stdin_csv(monkeypatch):

@@ -48,6 +48,7 @@ class TableView(Vertical):
         self._search_timer = None
         self._search_value = ""
         self._hidden_columns: set[str] = set()
+        self._string_frame: pd.DataFrame | None = None
 
     def compose(self) -> ComposeResult:
         yield Input(placeholder="/ to search  ·  type to filter rows", id="table-search")
@@ -124,6 +125,7 @@ class TableView(Vertical):
     def set_data(self, dataset: DataSet, mapping: ColumnMapping | None = None) -> None:
         self._sort_cols = []
         self._hidden_columns = set()
+        self._string_frame = None
         if self.is_mounted:
             self._frame = dataset.frame
             self._populate()
@@ -155,6 +157,23 @@ class TableView(Vertical):
             self._sort_cols.append((col, True))
         self._populate()
 
+    def _string_frame_cached(self) -> pd.DataFrame:
+        if self._string_frame is None:
+            self._string_frame = self._frame.astype(str).apply(lambda col: col.str.lower())
+        return self._string_frame
+
+    def _filter_cached(self, frame: pd.DataFrame, search: str) -> pd.DataFrame:
+        if not search:
+            return frame
+        needle = search.lower()
+        strings = self._string_frame_cached()
+        mask = pd.Series(False, index=strings.index)
+        for col in frame.columns:
+            mask = mask | strings[col].str.contains(needle, na=False, regex=False)
+        if not mask.index.equals(frame.index):
+            mask = mask.reindex(frame.index, fill_value=False)
+        return frame[mask]
+
     def _populate(self, search: str = "") -> None:
         table = self.query_one("#table-data", DataTable)
         table.clear(columns=True)
@@ -164,14 +183,14 @@ class TableView(Vertical):
         all_columns = [str(c) for c in frame.columns]
         visible_columns = [c for c in all_columns if c not in self._hidden_columns]
         table.add_columns(*visible_columns)
-        work = sort_frame_multi(frame, self._sort_cols)
-        total_before = len(work)
-        work = filter_frame(work, search)
+        total_before = len(frame)
+        work = self._filter_cached(frame, search)
         filtered_count = len(work)
+        work = sort_frame_multi(work, self._sort_cols)
         work = work.head(defaults.DEFAULT_MAX_ROWS)
         rows = [
-            [_fmt(row[c]) for c in visible_columns]
-            for _, row in work.iterrows()
+            [_fmt(value) for value in row]
+            for row in work[visible_columns].itertuples(index=False, name=None)
         ]
         if rows:
             table.add_rows(rows)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+from itertools import islice
 from pathlib import Path
 from typing import Any
 
@@ -163,9 +164,8 @@ def _read_json(path: Path, max_rows: int | None = None) -> tuple[pd.DataFrame, A
 
 
 def _read_log(path: Path, max_rows: int | None = None) -> pd.DataFrame:
-    lines = path.read_text(errors="replace").splitlines()
-    if max_rows is not None:
-        lines = lines[:max_rows]
+    with path.open(errors="replace") as handle:
+        lines = [line.rstrip("\n") for line in islice(handle, max_rows)]
     return pd.DataFrame({"line_no": range(1, len(lines) + 1), "line": lines})
 
 

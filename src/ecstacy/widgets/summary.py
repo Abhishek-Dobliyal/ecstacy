@@ -31,13 +31,16 @@ class SummaryCard(Static):
             f"  {'─' * 20} {'─' * 6} {'─' * 12} "
             f"{'─' * 12} {'─' * 12} {'─' * 12} {'─' * 12}"
         )
+        numeric_frame = frame[numeric_cols].apply(pd.to_numeric, errors="coerce")
+        stats = numeric_frame.agg(["count", "mean", "median", "std", "min", "max"])
         for col in numeric_cols:
-            series = pd.to_numeric(frame[col], errors="coerce").dropna()
-            if series.empty:
+            col_stats = stats[col]
+            if col_stats["count"] == 0:
                 continue
             lines.append(
-                f"  {str(col):<20} {len(series):>6} "
-                f"{series.mean():>12.2f} {series.median():>12.2f} "
-                f"{series.std():>12.2f} {series.min():>12.2f} {series.max():>12.2f}"
+                f"  {str(col):<20} {int(col_stats['count']):>6} "
+                f"{col_stats['mean']:>12.2f} {col_stats['median']:>12.2f} "
+                f"{col_stats['std']:>12.2f} {col_stats['min']:>12.2f} "
+                f"{col_stats['max']:>12.2f}"
             )
         self.update("\n".join(lines))

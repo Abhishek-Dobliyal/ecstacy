@@ -115,6 +115,53 @@ def test_table_get_current_view_respects_hidden_columns():
     assert "value" in view.columns
 
 
+def test_filter_cached_matches_filter_frame():
+    from ecstacy.widgets.table import TableView
+
+    tv = TableView()
+    tv._frame = _sample()
+    expected = filter_frame(_sample(), "US")
+    result = tv._filter_cached(tv._frame, "US")
+    assert list(result["value"]) == list(expected["value"])
+
+
+def test_filter_cached_reuses_cached_strings():
+    from ecstacy.widgets.table import TableView
+
+    tv = TableView()
+    tv._frame = _sample()
+    first = tv._filter_cached(tv._frame, "us")
+    assert len(first) == 2
+    cached = tv._string_frame
+    assert cached is not None
+    second = tv._filter_cached(tv._frame, "eu")
+    assert len(second) == 2
+    assert tv._string_frame is cached
+
+
+def test_filter_cached_respects_sorted_index():
+    from ecstacy.widgets.table import TableView
+
+    tv = TableView()
+    tv._frame = _sample()
+    sorted_frame = sort_frame_multi(tv._frame, [("value", False)])
+    result = tv._filter_cached(sorted_frame, "us")
+    assert list(result["value"]) == [12.0, 10.0]
+
+
+def test_set_data_invalidates_string_cache():
+    from ecstacy.core.dataset import DataSet
+    from ecstacy.widgets.table import TableView
+
+    tv = TableView()
+    tv._frame = _sample()
+    tv._filter_cached(tv._frame, "us")
+    assert tv._string_frame is not None
+    ds = DataSet.from_dataframe(_sample(), source_id="s", kind="test")
+    tv.set_data(ds)
+    assert tv._string_frame is None
+
+
 @pytest.mark.asyncio
 async def test_table_column_picker_hides_columns():
     from textual.app import App

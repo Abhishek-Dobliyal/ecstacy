@@ -34,24 +34,31 @@ class RestSource(Source):
         self.query = query or {}
         self.timeout = timeout
         self.max_rows = max_rows
+        self._client: httpx.Client | None = None
 
     def describe(self) -> str:
         return f"rest:{self.url}"
 
+    def close(self) -> None:
+        if self._client is not None:
+            self._client.close()
+            self._client = None
+
     def fetch(self) -> DataSet:
+        if self._client is None:
+            self._client = httpx.Client(timeout=self.timeout)
         try:
-            with httpx.Client(timeout=self.timeout) as client:
-                response = client.request(
-                    self.method, self.url, headers=self.headers, params=self.query
-                )
-                response.raise_for_status()
-                try:
-                    raw = response.json()
-                except Exception as exc:
-                    raise SourceError(
-                        f"response is not valid JSON from {self.url}",
-                        source_id=self.id,
-                    ) from exc
+            response = self._client.request(
+                self.method, self.url, headers=self.headers, params=self.query
+            )
+            response.raise_for_status()
+            try:
+                raw = response.json()
+            except Exception as exc:
+                raise SourceError(
+                    f"response is not valid JSON from {self.url}",
+                    source_id=self.id,
+                ) from exc
         except httpx.HTTPError as exc:
             raise SourceError(
                 f"request failed for {self.url}: {exc}", source_id=self.id

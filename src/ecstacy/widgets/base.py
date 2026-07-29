@@ -45,6 +45,7 @@ class PlotWidget(PlotextPlot):
         super().__init__(**kwargs)
         self._dataset: DataSet | None = None
         self._mapping: ColumnMapping | None = None
+        self._drawn_state: tuple[int, ColumnMapping] | None = None
 
     def set_data(self, dataset: DataSet, mapping: ColumnMapping | None = None) -> None:
         self._dataset = dataset
@@ -58,11 +59,16 @@ class PlotWidget(PlotextPlot):
         self.app.theme_changed_signal.subscribe(self, self._on_theme_changed)
 
     def _on_theme_changed(self, _theme) -> None:
+        self._drawn_state = None
         self.redraw()
 
     def redraw(self) -> None:
         if self._dataset is None or self._mapping is None:
             return
+        state = (id(self._dataset), self._mapping)
+        if self._drawn_state == state:
+            return
+        self._drawn_state = state
         plt = self.plt
         plt.clear_figure()
         try:

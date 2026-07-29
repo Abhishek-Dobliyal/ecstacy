@@ -116,3 +116,32 @@ def test_rest_source_limits_rows(monkeypatch):
     )
     dataset = create_source(spec).fetch()
     assert dataset.meta.rows == 3
+
+
+def test_rest_source_reuses_client_across_fetches(monkeypatch):
+    def mock_request(self, method, url, *, headers=None, params=None):
+        return Response(200, request=_request(), json=[{"value": 1}])
+
+    monkeypatch.setattr("httpx.Client.request", mock_request)
+    spec = SourceSpec(kind="rest", id="api", params={"url": "https://api.example.com/items"})
+    source = create_source(spec)
+    source.fetch()
+    first_client = source._client
+    assert first_client is not None
+    source.fetch()
+    assert source._client is first_client
+
+
+def test_rest_source_close_releases_client(monkeypatch):
+    def mock_request(self, method, url, *, headers=None, params=None):
+        return Response(200, request=_request(), json=[{"value": 1}])
+
+    monkeypatch.setattr("httpx.Client.request", mock_request)
+    spec = SourceSpec(kind="rest", id="api", params={"url": "https://api.example.com/items"})
+    source = create_source(spec)
+    source.fetch()
+    assert source._client is not None
+    source.close()
+    assert source._client is None
+    source.fetch()
+    assert source._client is not None

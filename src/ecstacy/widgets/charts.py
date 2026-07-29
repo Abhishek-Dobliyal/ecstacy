@@ -146,7 +146,7 @@ class BarChart(PlotWidget):
         if not category or not value:
             plt.title("bar chart needs a category and a numeric column")
             return
-        work = frame[[category, value]].copy()
+        work = frame[[category, value]]
         work[value] = numeric(work[value])
         work = work.dropna(subset=[category, value])
         if work.empty:
@@ -284,7 +284,7 @@ class PieChart(PlotWidget):
         if not category or not value:
             plt.title("pie chart needs a category and a numeric column")
             return
-        work = frame[[category, value]].copy()
+        work = frame[[category, value]]
         work[value] = numeric(work[value])
         work = work.dropna(subset=[category, value])
         if work.empty:
