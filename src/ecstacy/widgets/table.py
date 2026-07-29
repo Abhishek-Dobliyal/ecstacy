@@ -17,6 +17,7 @@ class TableView(Vertical):
     BINDINGS = [
         ("slash", "focus_search", "Search"),
         ("s", "sort_prompt", "Sort"),
+        ("c", "column_picker", "Columns"),
     ]
     DEFAULT_CSS = """
     TableView {
@@ -41,6 +42,7 @@ class TableView(Vertical):
         self._pending_dataset: DataSet | None = None
         self._search_timer = None
         self._search_value = ""
+        self._hidden_columns: set[str] = set()
 
     def compose(self) -> ComposeResult:
         yield Input(placeholder="/ to search  ·  type to filter rows", id="table-search")
@@ -63,9 +65,23 @@ class TableView(Vertical):
         table.focus()
         self.notify("use arrow keys to select a column, press enter to sort")
 
+    def action_column_picker(self) -> None:
+        from ecstacy.screens.modals import ColumnPickerScreen
+
+        columns = [str(c) for c in self._frame.columns]
+        self.app.push_screen(
+            ColumnPickerScreen(columns, set(self._hidden_columns)),
+            self._on_columns_picked,
+        )
+
+    def _on_columns_picked(self, hidden: set[str]) -> None:
+        self._hidden_columns = hidden
+        self._populate(self._search_value)
+
     def set_data(self, dataset: DataSet, mapping: ColumnMapping | None = None) -> None:
         self._sort_col = None
         self._sort_asc = True
+        self._hidden_columns = set()
         if self.is_mounted:
             self._frame = dataset.frame
             self._populate()
@@ -102,14 +118,15 @@ class TableView(Vertical):
         frame = self._frame
         if frame.empty:
             return
-        columns = [str(c) for c in frame.columns]
-        table.add_columns(*columns)
+        all_columns = [str(c) for c in frame.columns]
+        visible_columns = [c for c in all_columns if c not in self._hidden_columns]
+        table.add_columns(*visible_columns)
         work = sort_frame(frame, self._sort_col, self._sort_asc)
         work = filter_frame(work, search)
         work = work.head(defaults.DEFAULT_MAX_ROWS)
         rows = [
-            [_fmt(value) for value in row]
-            for row in work.itertuples(index=False, name=None)
+            [_fmt(row[c]) for c in visible_columns]
+            for _, row in work.iterrows()
         ]
         if rows:
             table.add_rows(rows)
