@@ -142,6 +142,35 @@ def test_max_chart_points_constant():
 
 
 @pytest.mark.asyncio
+async def test_chart_screen_transform_bar_filters_data():
+    from textual.app import App
+
+    from ecstacy.core.dataset import DataSet
+    from ecstacy.screens.chart import ChartScreen
+
+    class _App(App):
+        def on_mount(self):
+            df = pd.DataFrame(
+                {"region": ["us", "eu", "us", "eu"], "value": [10, 20, 5, 30]}
+            )
+            ds = DataSet.from_dataframe(df, source_id="s", kind="test")
+            self.push_screen(ChartScreen(ds, "table"))
+
+    app = _App()
+    async with app.run_test() as pilot:
+        for _ in range(6):
+            await pilot.pause()
+        screen = app.screen
+        assert isinstance(screen, ChartScreen)
+        screen._transform_query = "where value > 10"
+        await screen._render_current()
+        await pilot.pause()
+        transformed = screen._get_transformed_dataset()
+        assert transformed.meta.rows == 2
+        assert "eu" in list(transformed.frame["region"])
+
+
+@pytest.mark.asyncio
 async def test_chart_screen_refreshes_data(tmp_path):
     from textual.app import App
 

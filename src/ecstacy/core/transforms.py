@@ -76,3 +76,54 @@ def _resample(frame: pd.DataFrame, time_column: str, rule: str, agg: str) -> pd.
     except Exception as exc:
         raise TransformError(f"resample {rule!r} failed: {exc}") from exc
     return resampled.reset_index()
+
+
+def parse_transform_query(text: str) -> Transform:
+    """Parse a transform query string into a Transform object.
+
+    Supported clauses (separated by | or newlines):
+      where <expr>          — pandas query expression
+      group_by <col>[, ...]  — group by columns
+      agg <func>            — aggregation function (sum, mean, count, ...)
+      select <col>[, ...]    — select columns
+      limit <n>             — limit to N rows
+      resample <rule>       — resample rule (e.g. D, W, M)
+      time <col>            — time column for resample
+
+    Example: "where value > 100 | group_by region | agg mean | limit 10"
+    """
+    parts: dict[str, Any] = {}
+    for segment in text.replace("\n", "|").split("|"):
+        segment = segment.strip()
+        if not segment:
+            continue
+        tokens = segment.split(None, 1)
+        if len(tokens) < 2:
+            continue
+        keyword, rest = tokens[0].lower(), tokens[1].strip()
+        if keyword == "where":
+            parts["where"] = rest
+        elif keyword == "group_by":
+            parts["group_by"] = [c.strip() for c in rest.split(",") if c.strip()]
+        elif keyword == "agg":
+            parts["agg"] = rest
+        elif keyword == "select":
+            parts["select"] = [c.strip() for c in rest.split(",") if c.strip()]
+        elif keyword == "limit":
+            try:
+                parts["limit"] = int(rest)
+            except ValueError:
+                raise TransformError(f"invalid limit value: {rest!r}") from None
+        elif keyword == "resample":
+            parts["resample"] = rest
+        elif keyword == "time":
+            parts["time_column"] = rest
+    return Transform(
+        select=parts.get("select"),
+        where=parts.get("where"),
+        group_by=parts.get("group_by"),
+        agg=parts.get("agg", "sum"),
+        resample=parts.get("resample"),
+        time_column=parts.get("time_column"),
+        limit=parts.get("limit"),
+    )
