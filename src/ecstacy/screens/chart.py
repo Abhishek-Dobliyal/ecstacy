@@ -3,7 +3,8 @@ from __future__ import annotations
 from textual.app import ComposeResult
 from textual.containers import Container
 from textual.screen import Screen
-from textual.widgets import Footer, Header, Input
+from textual.widget import Widget
+from textual.widgets import DataTable, Footer, Header, Input
 
 from ecstacy.core.dataset import DataSet
 from ecstacy.core.scheduler import Job, Scheduler
@@ -170,6 +171,19 @@ class ChartScreen(Screen):
             kind=self.dataset.meta.kind,
         )
 
+    def _focus_content(self, widget: Widget) -> None:
+        """Focus the interactive part of the newly rendered widget.
+
+        Without this, auto-focus lands on the transform-bar Input whenever the
+        previously focused widget is unmounted, and keys like n/p/arrows get
+        swallowed by the Input instead of reaching the screen bindings.
+        """
+        tables = widget.query(DataTable)
+        if tables:
+            self.set_focus(tables.first())
+        else:
+            self.set_focus(None)
+
     async def _render_current(self) -> None:
         holder = self.query_one("#viz-holder", Container)
         await holder.remove_children()
@@ -185,3 +199,4 @@ class ChartScreen(Screen):
         )
         widget.styles.opacity = 0.0
         widget.styles.animate("opacity", 1.0, duration=0.25, easing="out_cubic")
+        self._focus_content(widget)

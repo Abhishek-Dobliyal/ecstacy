@@ -196,6 +196,9 @@ class DashboardScreen(Screen):
             await self._render_multi(holder)
         else:
             await self._render_single(holder)
+        # Rebuilding panels destroys the previously focused widget; reset focus
+        # so panel search Inputs don't swallow the n/p/arrow screen bindings.
+        self.set_focus(None)
 
     async def _render_multi(self, holder: Container) -> None:
         cols, rows = _grid_size(len(self.dashboard.panels))

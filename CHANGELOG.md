@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Table column sort now works: DataTable columns were added without keys, so
+  a column selection resolved to the string "None" and sorting silently did
+  nothing; the column is now resolved by its visual index.
+- Switching visualizations no longer traps keyboard input in the
+  transform/query bar: after a re-render, focus moves to the table (or is
+  cleared), so n/p/arrow bindings keep working. Dashboard panel rebuilds
+  reset focus the same way.
+
 ### Performance
 - Table row building uses `itertuples()` instead of `iterrows()` (10-50x
   faster on large result sets).

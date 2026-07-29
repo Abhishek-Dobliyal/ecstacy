@@ -163,6 +163,43 @@ def test_set_data_invalidates_string_cache():
 
 
 @pytest.mark.asyncio
+async def test_table_column_selected_sorts_rows():
+    from textual.app import App
+    from textual.coordinate import Coordinate
+    from textual.widgets import DataTable
+    from textual.widgets._data_table import ColumnKey
+
+    from ecstacy.core.dataset import DataSet
+    from ecstacy.screens.chart import ChartScreen
+
+    class _App(App):
+        def on_mount(self):
+            df = pd.DataFrame({"name": ["b", "a", "c"], "value": [2.0, 3.0, 1.0]})
+            ds = DataSet.from_dataframe(df, source_id="s", kind="test")
+            self.push_screen(ChartScreen(ds, "table"))
+
+    app = _App()
+    async with app.run_test() as pilot:
+        for _ in range(6):
+            await pilot.pause()
+        table_view = app.screen.query_one("TableView")
+        dt = table_view.query_one("#table-data", DataTable)
+        # Columns are added without keys, so Textual posts a ColumnKey whose
+        # value is None; selection must resolve by visual column index.
+        dt.post_message(DataTable.ColumnSelected(dt, 1, ColumnKey(None)))
+        for _ in range(6):
+            await pilot.pause()
+        assert table_view._sort_cols == [("value", True)]
+        assert dt.get_cell_at(Coordinate(0, 0)) == "c"
+        # selecting again toggles direction
+        dt.post_message(DataTable.ColumnSelected(dt, 1, ColumnKey(None)))
+        for _ in range(6):
+            await pilot.pause()
+        assert table_view._sort_cols == [("value", False)]
+        assert dt.get_cell_at(Coordinate(0, 0)) == "a"
+
+
+@pytest.mark.asyncio
 async def test_table_column_picker_hides_columns():
     from textual.app import App
     from textual.widgets import DataTable

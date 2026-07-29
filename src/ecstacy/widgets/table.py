@@ -146,9 +146,15 @@ class TableView(Vertical):
     def on_data_table_column_selected(self, event: DataTable.ColumnSelected) -> None:
         if event.data_table.id != "table-data":
             return
-        col = str(event.column_key.value) if event.column_key else None
-        if col is None:
+        # Columns are added without keys, so column_key.value is None; resolve
+        # the column by its visual index instead.
+        visible_columns = [
+            str(c) for c in self._frame.columns if str(c) not in self._hidden_columns
+        ]
+        index = event.cursor_column
+        if not (0 <= index < len(visible_columns)):
             return
+        col = visible_columns[index]
         existing = [(c, a) for c, a in self._sort_cols if c == col]
         if existing:
             idx = self._sort_cols.index(existing[0])
