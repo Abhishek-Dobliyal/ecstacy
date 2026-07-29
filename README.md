@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.png" alt="Ecstacy" width="200">
+  <img src="https://raw.githubusercontent.com/Abhishek-Dobliyal/ecstacy/main/assets/logo.png" alt="Ecstacy" width="200">
 </p>
 
 <h1 align="center">Ecstacy</h1>
