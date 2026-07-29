@@ -3,7 +3,7 @@ from __future__ import annotations
 import pandas as pd
 from textual.app import ComposeResult
 from textual.containers import Vertical
-from textual.widgets import DataTable, Input
+from textual.widgets import DataTable, Input, Label
 
 from ecstacy.config import defaults
 from ecstacy.core import registry
@@ -32,13 +32,17 @@ class TableView(Vertical):
     TableView #table-data {
         height: 1fr;
     }
+    TableView #table-footer {
+        height: 1;
+        color: $text-muted;
+        padding: 0 1;
+    }
     """
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self._frame: pd.DataFrame = pd.DataFrame()
-        self._sort_col: str | None = None
-        self._sort_asc: bool = True
+        self._sort_cols: list[tuple[str, bool]] = []
         self._pending_dataset: DataSet | None = None
         self._search_timer = None
         self._search_value = ""
@@ -47,6 +51,7 @@ class TableView(Vertical):
     def compose(self) -> ComposeResult:
         yield Input(placeholder="/ to search  ·  type to filter rows", id="table-search")
         yield DataTable(id="table-data")
+        yield Label("", id="table-footer")
 
     def on_mount(self) -> None:
         table = self.query_one("#table-data", DataTable)
@@ -79,8 +84,7 @@ class TableView(Vertical):
         self._populate(self._search_value)
 
     def set_data(self, dataset: DataSet, mapping: ColumnMapping | None = None) -> None:
-        self._sort_col = None
-        self._sort_asc = True
+        self._sort_cols = []
         self._hidden_columns = set()
         if self.is_mounted:
             self._frame = dataset.frame
@@ -105,11 +109,12 @@ class TableView(Vertical):
         col = str(event.column_key.value) if event.column_key else None
         if col is None:
             return
-        if self._sort_col == col:
-            self._sort_asc = not self._sort_asc
+        existing = [(c, a) for c, a in self._sort_cols if c == col]
+        if existing:
+            idx = self._sort_cols.index(existing[0])
+            self._sort_cols[idx] = (col, not self._sort_cols[idx][1])
         else:
-            self._sort_col = col
-            self._sort_asc = True
+            self._sort_cols.append((col, True))
         self._populate()
 
     def _populate(self, search: str = "") -> None:
@@ -121,8 +126,10 @@ class TableView(Vertical):
         all_columns = [str(c) for c in frame.columns]
         visible_columns = [c for c in all_columns if c not in self._hidden_columns]
         table.add_columns(*visible_columns)
-        work = sort_frame(frame, self._sort_col, self._sort_asc)
+        work = sort_frame_multi(frame, self._sort_cols)
+        total_before = len(work)
         work = filter_frame(work, search)
+        filtered_count = len(work)
         work = work.head(defaults.DEFAULT_MAX_ROWS)
         rows = [
             [_fmt(row[c]) for c in visible_columns]
@@ -130,6 +137,16 @@ class TableView(Vertical):
         ]
         if rows:
             table.add_rows(rows)
+        footer = self.query_one("#table-footer", Label)
+        sort_text = ""
+        if self._sort_cols:
+            sort_text = "  ·  sorted by " + ", ".join(
+                f"{c} {'↑' if a else '↓'}" for c, a in self._sort_cols
+            )
+        if search:
+            footer.update(f"{filtered_count} rows (of {total_before}){sort_text}")
+        else:
+            footer.update(f"{filtered_count} rows{sort_text}")
 
 
 def sort_frame(frame: pd.DataFrame, column: str | None, ascending: bool) -> pd.DataFrame:
@@ -137,6 +154,21 @@ def sort_frame(frame: pd.DataFrame, column: str | None, ascending: bool) -> pd.D
         return frame
     try:
         return frame.sort_values(by=column, ascending=ascending)
+    except Exception:
+        return frame
+
+
+def sort_frame_multi(
+    frame: pd.DataFrame, sort_cols: list[tuple[str, bool]]
+) -> pd.DataFrame:
+    valid = [(c, a) for c, a in sort_cols if c in frame.columns]
+    if not valid:
+        return frame
+    try:
+        return frame.sort_values(
+            by=[c for c, _ in valid],
+            ascending=[a for _, a in valid],
+        )
     except Exception:
         return frame
 

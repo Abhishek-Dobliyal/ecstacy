@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 
 from ecstacy.config import defaults
-from ecstacy.widgets.table import filter_frame, sort_frame
+from ecstacy.widgets.table import filter_frame, sort_frame, sort_frame_multi
 
 
 def _sample() -> pd.DataFrame:
@@ -69,6 +69,27 @@ def test_sort_frame_covers_all_rows_not_just_head():
     capped = sorted_frame.head(defaults.DEFAULT_MAX_ROWS)
     assert capped.iloc[0]["value"] == 1.0
     assert capped.iloc[-1]["value"] == float(defaults.DEFAULT_MAX_ROWS)
+
+
+def test_sort_frame_multi_two_columns():
+    frame = pd.DataFrame(
+        {"region": ["us", "eu", "us", "eu"], "value": [10, 15, 5, 20]}
+    )
+    result = sort_frame_multi(frame, [("region", True), ("value", False)])
+    assert list(result["region"]) == ["eu", "eu", "us", "us"]
+    assert list(result["value"]) == [20, 15, 10, 5]
+
+
+def test_sort_frame_multi_empty_returns_unchanged():
+    frame = _sample()
+    result = sort_frame_multi(frame, [])
+    assert len(result) == 4
+
+
+def test_sort_frame_multi_missing_column_ignored():
+    frame = _sample()
+    result = sort_frame_multi(frame, [("missing", True), ("value", True)])
+    assert list(result["value"]) == [8.0, 10.0, 12.0, 15.0]
 
 
 @pytest.mark.asyncio
