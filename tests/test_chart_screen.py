@@ -87,6 +87,41 @@ async def test_focus_returns_to_table_after_cycling_back():
 
 
 @pytest.mark.asyncio
+async def test_box_pie_heatmap_render_without_errors():
+    frame = pd.DataFrame(
+        {
+            "region": ["us", "eu", "us", "eu", "latam", "latam"] * 4,
+            "value": [10.0, 15.5, 12.0, 8.0, 20.0, 18.0] * 4,
+            "count": [3, 5, 4, 2, 7, 6] * 4,
+            "ratio": [0.1, 0.5, 0.3, 0.2, 0.7, 0.6] * 4,
+        }
+    )
+    ds = DataSet.from_dataframe(frame, source_id="s", kind="test")
+
+    from textual.app import App
+
+    from ecstacy.screens.chart import ChartScreen
+
+    class _App(App):
+        def on_mount(self):
+            self.push_screen(ChartScreen(ds, "table"))
+
+    app = _App()
+    async with app.run_test() as pilot:
+        await _settle(pilot)
+        screen = app.screen
+        for viz in ("box", "pie", "heatmap"):
+            idx = screen.names.index(viz)
+            while screen.index != idx:
+                await screen.action_next_viz()
+            await _settle(pilot)
+            widget = screen.query_one("#viz-holder").children[0]
+            rendered = widget.plt.build()
+            assert "cannot render" not in rendered, f"{viz} failed to render"
+            assert rendered.strip(), f"{viz} rendered empty output"
+
+
+@pytest.mark.asyncio
 async def test_dashboard_render_leaves_focus_clear():
     from textual.app import App
 

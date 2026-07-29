@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import contextlib
+import io
+
 import pandas as pd
 from pandas.api import types as pdt
 
@@ -223,8 +226,11 @@ class Heatmap(PlotWidget):
         if numbers.shape[1] < 2:
             plt.title("heatmap needs at least two numeric columns")
             return
-        matrix = numbers.corr().fillna(0.0).round(2).values.tolist()
-        plt.matrix_plot(matrix, marker="braille")
+        corr = numbers.corr().fillna(0.0).round(2)
+        # plotext 5.3.2's draw_heatmap prints the frame to stdout (library
+        # bug); suppress it so it doesn't corrupt the TUI display.
+        with contextlib.redirect_stdout(io.StringIO()):
+            plt.heatmap(corr)
         _decorate(plt, "correlation matrix")
 
 
@@ -243,25 +249,29 @@ class BoxPlot(PlotWidget):
             return
         if not category or category not in frame.columns:
             category = None
-        series = numeric(frame[value]).dropna()
-        if series.empty:
-            plt.title(f"no data for {value}")
-            return
+        palette = _theme_palette(self.app)
+        colors = [_hex_rgb(palette[0]), _hex_rgb(palette[1])]
         if category:
-            groups = frame.dropna(subset=[value, category]).groupby(category)[value]
-            palette = _theme_palette(self.app)
-            for i, (cat, group) in enumerate(groups):
+            grouped = frame.dropna(subset=[value, category]).groupby(category)[value]
+            labels: list[str] = []
+            data: list[list[float]] = []
+            for cat, group in grouped:
                 vals = numeric(group).dropna().tolist()
                 if not vals:
                     continue
-                color = _hex_rgb(palette[i % len(palette)])
-                plt.boxplot(
-                    {str(cat): vals},
-                    color=color,
-                )
+                labels.append(str(cat))
+                data.append(vals)
+            if not data:
+                plt.title(f"no data for {value}")
+                return
+            plt.box(labels, data, colors=colors)
             _decorate(plt, f"{value} by {category}", ylabel=value)
         else:
-            plt.boxplot({value: series.tolist()}, color=_hex_rgb(_theme_palette(self.app)[0]))
+            series = numeric(frame[value]).dropna()
+            if series.empty:
+                plt.title(f"no data for {value}")
+                return
+            plt.box([value], [series.tolist()], colors=colors)
             _decorate(plt, f"distribution of {value}", ylabel=value)
 
 
@@ -295,8 +305,6 @@ class PieChart(PlotWidget):
         values = grouped.tolist()
         palette = _theme_palette(self.app)
         colors = [_hex_rgb(palette[i % len(palette)]) for i in range(len(labels))]
-        try:
-            plt.pie(values, labels=labels, colors=colors)
-        except Exception:
-            plt.bar(labels, values, orientation="vertical", color=colors, marker="braille")
+        # plotext has no pie primitive; horizontal bars are the proportion view
+        plt.bar(labels, values, orientation="horizontal", color=colors, marker="braille")
         _decorate(plt, f"{value} by {category}")

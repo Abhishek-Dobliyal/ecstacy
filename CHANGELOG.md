@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Box plot, pie chart, and heatmap now render: the box plot called the
+  nonexistent `plt.boxplot()` (now uses `plt.box()` with labels + raw data),
+  the heatmap passed correlation values to `matrix_plot()` which expects an
+  image-like color matrix (now uses `plt.heatmap()` with the labeled
+  correlation DataFrame), and the pie chart relied on a nonexistent
+  `plt.pie()` (now draws horizontal proportion bars, as plotext has no pie
+  primitive).
 - Table column sort now works: DataTable columns were added without keys, so
   a column selection resolved to the string "None" and sorting silently did
   nothing; the column is now resolved by its visual index.
