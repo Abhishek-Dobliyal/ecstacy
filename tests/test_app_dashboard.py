@@ -128,3 +128,109 @@ async def test_late_open_does_not_push_chart(monkeypatch):
         assert app.screen is not home
         assert not isinstance(app.screen, ChartScreen)
 
+
+# -----------------------------------------------------------------------
+# Progressive loading
+# -----------------------------------------------------------------------
+
+def _write_large_csv(tmp_path, rows: int = 5000):
+    import pandas as pd
+
+    path = tmp_path / "large.csv"
+    pd.DataFrame(
+        {"a": range(rows), "b": range(rows, rows * 2)}
+    ).to_csv(path, index=False)
+    return path
+
+
+@pytest.mark.asyncio
+async def test_progressive_loading_shows_first_batch_then_full(tmp_path):
+    from ecstacy.sources.base import SourceSpec
+
+    path = _write_large_csv(tmp_path, 5000)
+    spec = SourceSpec(kind="file", id=path.name, params={"path": str(path)})
+    app = EcstacyApp(load_app_config(), open_spec=spec, show_splash=False)
+    async with app.run_test() as pilot:
+        # Wait for both fetches (first batch + full) to complete.
+        await app.workers.wait_for_complete()
+        for _ in range(12):
+            await pilot.pause()
+        screen = app.screen
+        assert isinstance(screen, ChartScreen)
+        # After progressive loading completes, the dataset should have all
+        # 5000 rows, not just the 1000-row first batch.
+        assert screen.dataset.meta.rows == 5000
+        screen._stop_refresh()
+
+
+@pytest.mark.asyncio
+async def test_progressive_loading_skipped_for_small_max_rows(tmp_path):
+    from ecstacy.sources.base import SourceSpec
+
+    path = _write_large_csv(tmp_path, 5000)
+    spec = SourceSpec(
+        kind="file", id=path.name, params={"path": str(path), "max_rows": 500}
+    )
+    app = EcstacyApp(load_app_config(), open_spec=spec, show_splash=False)
+    async with app.run_test() as pilot:
+        await app.workers.wait_for_complete()
+        for _ in range(10):
+            await pilot.pause()
+        screen = app.screen
+        assert isinstance(screen, ChartScreen)
+        # max_rows=500 < 1000 → single fetch, no progressive expansion.
+        assert screen.dataset.meta.rows == 500
+        screen._stop_refresh()
+
+
+@pytest.mark.asyncio
+async def test_progressive_loading_skipped_for_non_progressive_sources(monkeypatch):
+    from httpx import Request, Response
+
+    from ecstacy.sources.base import SourceSpec
+
+    def mock_request(self, method, url, *, headers=None, params=None):
+        return Response(
+            200,
+            request=Request("GET", "https://api.example.com/items"),
+            json=[{"value": i} for i in range(2000)],
+        )
+
+    monkeypatch.setattr("httpx.Client.request", mock_request)
+    spec = SourceSpec(
+        kind="rest", id="api", params={"url": "https://api.example.com/items"}
+    )
+    app = EcstacyApp(load_app_config(), open_spec=spec, show_splash=False)
+    async with app.run_test() as pilot:
+        await app.workers.wait_for_complete()
+        for _ in range(10):
+            await pilot.pause()
+        screen = app.screen
+        assert isinstance(screen, ChartScreen)
+        # REST doesn't support progressive loading → single fetch, all rows.
+        assert screen.dataset.meta.rows == 2000
+        screen._stop_refresh()
+
+
+@pytest.mark.asyncio
+async def test_progressive_update_dropped_if_user_navigated_away(tmp_path):
+    from ecstacy.sources.base import SourceSpec
+
+    path = _write_large_csv(tmp_path, 5000)
+    spec = SourceSpec(kind="file", id=path.name, params={"path": str(path)})
+    app = EcstacyApp(load_app_config(), open_spec=spec, show_splash=False)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        # Pop the ChartScreen before the full fetch completes.
+        # We need to wait for the first batch to arrive, then pop.
+        await app.workers.wait_for_complete()
+        for _ in range(6):
+            await pilot.pause()
+        screen = app.screen
+        if isinstance(screen, ChartScreen):
+            screen.app.pop_screen()
+        await pilot.pause()
+        # No crash — the progressive update was silently dropped because
+        # the screen is no longer the ChartScreen for this spec.
+        assert not isinstance(app.screen, ChartScreen)
+

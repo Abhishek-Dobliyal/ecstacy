@@ -17,6 +17,7 @@ from ecstacy.util.timeparse import parse_duration
 from ecstacy.widgets.base import ColumnMapping
 
 _CSS_PATH = str(Path(__file__).parent / "theming" / "ecstacy.tcss")
+_PROGRESSIVE_BATCH = 1000
 
 
 class EcstacyApp(App):
@@ -108,6 +109,26 @@ class EcstacyApp(App):
         key = (spec.kind, spec.id)
         try:
             source = create_source(spec)
+        except SourceError as error:
+            self._deliver(
+                self._open_failed,
+                key,
+                f"failed to load {error.source_id or spec.id}: {error.message}",
+            )
+            return
+        except Exception as error:
+            self._deliver(self._open_failed, key, f"failed to load: {error}")
+            return
+
+        user_max_rows = getattr(source, "max_rows", None)
+        progressive = (
+            source.supports_progressive
+            and (user_max_rows is None or user_max_rows > _PROGRESSIVE_BATCH)
+        )
+
+        if progressive:
+            source.max_rows = _PROGRESSIVE_BATCH
+        try:
             dataset = source.fetch(keep_raw=keep_raw)
         except SourceError as error:
             self._deliver(
@@ -121,6 +142,19 @@ class EcstacyApp(App):
             return
         self._deliver(self._show_dataset, key, spec, source, dataset, viz, mapping)
 
+        if progressive:
+            source.max_rows = user_max_rows
+            try:
+                full_dataset = source.fetch(keep_raw=keep_raw)
+            except Exception as error:
+                self._deliver(
+                    self._progressive_failed, key, spec, str(error),
+                )
+                return
+            self._deliver(
+                self._progressive_update, key, spec, full_dataset,
+            )
+
     def _deliver(self, callback, *args) -> None:
         try:
             self.call_from_thread(callback, *args)
@@ -130,6 +164,25 @@ class EcstacyApp(App):
     def _open_failed(self, key: tuple[str, str], message: str) -> None:
         self._inflight_opens.pop(key, None)
         self.notify(message, severity="error")
+
+    def _progressive_update(
+        self, key: tuple[str, str], spec: SourceSpec, dataset: DataSet
+    ) -> None:
+        screen = self.screen
+        if not isinstance(screen, ChartScreen) or screen.spec is not spec:
+            return
+        screen._on_refresh_data(dataset)
+
+    def _progressive_failed(
+        self, key: tuple[str, str], spec: SourceSpec, error: str
+    ) -> None:
+        screen = self.screen
+        if not isinstance(screen, ChartScreen) or screen.spec is not spec:
+            return
+        self.notify(
+            f"showing first {_PROGRESSIVE_BATCH} rows — full load failed: {error}",
+            severity="warning",
+        )
 
     def _show_dataset(
         self,

@@ -25,6 +25,7 @@ class SourceSpecError(EcstacyError):
 class Source(ABC):
     kind: str = "base"
     supports_stream: bool = False
+    supports_progressive: bool = False
 
     def __init__(self, id: str) -> None:
         self.id = id

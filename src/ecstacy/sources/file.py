@@ -47,6 +47,7 @@ class FileSource(Source):
     ) -> None:
         super().__init__(id=id)
         self.is_stdin = path == _STDIN_SENTINEL
+        self.supports_progressive = not self.is_stdin
         self.path = Path(path).expanduser() if not self.is_stdin else Path(path)
         self.fmt = fmt or (
             _READERS.get(self.path.suffix.lower(), "csv") if not self.is_stdin else "csv"

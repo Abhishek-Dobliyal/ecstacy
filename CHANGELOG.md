@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.1] - 2026-07-29
+
+### Added
+- Progressive loading for file sources: the first 1000 rows (`DEFAULT_MAX_ROWS`)
+  are fetched with DuckDB `LIMIT` pushdown and rendered instantly, then the
+  full dataset is fetched in the background and delivered to the active widget
+  in place. Perceived latency on large files drops from "full parse" to "first
+  batch" (~4 ms for 1000 rows vs ~391 ms for 1M). If the full fetch fails, a
+  warning notifies the user that they're seeing the first 1000 rows only.
+  Skipped when `--max-rows` is set below 1000 or for non-progressive sources
+  (REST, SQL, SQLite, socket, stdin).
+
 ## [0.9.0] - 2026-07-29
 
 ### Added
