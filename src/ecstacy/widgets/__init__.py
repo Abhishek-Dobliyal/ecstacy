@@ -1,7 +1,7 @@
 from textual.widget import Widget
 
 from ecstacy.core import registry
-from ecstacy.widgets import charts, gauge, json_tree, spark, table  # noqa: F401
+from ecstacy.widgets import charts, gauge, json_tree, spark, summary, table  # noqa: F401
 from ecstacy.widgets.base import ColumnMapping, auto_mapping
 
 VIZ_ORDER = [
@@ -15,6 +15,7 @@ VIZ_ORDER = [
     "heatmap",
     "box",
     "pie",
+    "summary",
     "json",
 ]
 

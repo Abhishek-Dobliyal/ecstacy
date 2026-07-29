@@ -136,3 +136,56 @@ async def test_heatmap_renders_with_insufficient_numeric_columns():
     async with _App().run_test() as pilot:
         for _ in range(6):
             await pilot.pause()
+
+
+@pytest.mark.asyncio
+async def test_summary_card_renders_with_numeric_data():
+    from textual.app import App
+
+    from ecstacy.screens.chart import ChartScreen
+
+    class _App(App):
+        def on_mount(self):
+            df = pd.DataFrame(
+                {"value": [10.0, 20.0, 30.0, 40.0, 50.0], "count": [1, 2, 3, 4, 5]}
+            )
+            ds = DataSet.from_dataframe(df, source_id="s", kind="test")
+            self.push_screen(ChartScreen(ds, "summary"))
+
+    async with _App().run_test() as pilot:
+        for _ in range(6):
+            await pilot.pause()
+
+
+@pytest.mark.asyncio
+async def test_summary_card_no_numeric_columns():
+    from textual.app import App
+
+    from ecstacy.screens.chart import ChartScreen
+
+    class _App(App):
+        def on_mount(self):
+            df = pd.DataFrame({"region": ["us", "eu", "ap"]})
+            ds = DataSet.from_dataframe(df, source_id="s", kind="test")
+            self.push_screen(ChartScreen(ds, "summary"))
+
+    async with _App().run_test() as pilot:
+        for _ in range(6):
+            await pilot.pause()
+
+
+@pytest.mark.asyncio
+async def test_summary_card_empty_frame():
+    from textual.app import App
+
+    from ecstacy.screens.chart import ChartScreen
+
+    class _App(App):
+        def on_mount(self):
+            df = pd.DataFrame()
+            ds = DataSet.from_dataframe(df, source_id="s", kind="test")
+            self.push_screen(ChartScreen(ds, "summary"))
+
+    async with _App().run_test() as pilot:
+        for _ in range(6):
+            await pilot.pause()
