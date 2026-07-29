@@ -51,6 +51,7 @@ class TableView(Vertical):
         self._string_frame: pd.DataFrame | None = None
         self._string_frame_source: pd.DataFrame | None = None
         self._search_gen = 0
+        self._rendered_columns: tuple[str, ...] = ()
 
     def compose(self) -> ComposeResult:
         yield Input(placeholder="/ to search  ·  type to filter rows", id="table-search")
@@ -271,13 +272,19 @@ class TableView(Vertical):
     def _populate(self, search: str = "") -> None:
         self._search_gen += 1  # invalidate any in-flight search worker
         table = self.query_one("#table-data", DataTable)
-        table.clear(columns=True)
         frame = self._frame
         if frame.empty:
+            table.clear(columns=True)
+            self._rendered_columns = ()
             return
         all_columns = [str(c) for c in frame.columns]
         visible_columns = [c for c in all_columns if c not in self._hidden_columns]
-        table.add_columns(*visible_columns)
+        if tuple(visible_columns) != self._rendered_columns:
+            table.clear(columns=True)
+            table.add_columns(*visible_columns)
+            self._rendered_columns = tuple(visible_columns)
+        else:
+            table.clear()  # rows only; column layout is unchanged
         total_before = len(frame)
         work = self._filter_cached(frame, search)
         filtered_count = len(work)
@@ -315,15 +322,6 @@ def _footer_text(
     if search:
         count_text += f" (of {total_before})"
     return f"{count_text}{sort_text}"
-
-
-def sort_frame(frame: pd.DataFrame, column: str | None, ascending: bool) -> pd.DataFrame:
-    if not column or column not in frame.columns:
-        return frame
-    try:
-        return frame.sort_values(by=column, ascending=ascending)
-    except Exception:
-        return frame
 
 
 def sort_frame_multi(

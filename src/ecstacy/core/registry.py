@@ -18,9 +18,6 @@ class Registry(Generic[T]):
 
         return wrapper
 
-    def add(self, name: str, item: T) -> None:
-        self._items[name] = item
-
     def get(self, name: str) -> T:
         if name not in self._items:
             raise KeyError(f"unknown {self._label}: {name}")

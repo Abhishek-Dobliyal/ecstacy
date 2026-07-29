@@ -187,7 +187,10 @@ class Histogram(PlotWidget):
             column = columns[0] if columns else None
         if not column:
             return
-        values = numeric(frame[column]).dropna().tolist()
+        series = numeric(frame[column]).dropna()
+        if len(series) > MAX_CHART_POINTS:
+            series = series.tail(MAX_CHART_POINTS)
+        values = series.tolist()
         if not values:
             plt.title(f"no numeric data for {column}")
             return
@@ -208,8 +211,6 @@ class Scatter(PlotWidget):
             nums = _numeric_columns(frame)
             if len(nums) >= 2:
                 x, y = nums[0], nums[1]
-            elif len(nums) == 1:
-                x = nums[0]
         if not x or not y:
             plt.title("scatter needs two numeric columns")
             return
@@ -241,6 +242,8 @@ class Heatmap(PlotWidget):
         if numbers.shape[1] < 2:
             plt.title("heatmap needs at least two numeric columns")
             return
+        if len(numbers) > MAX_CHART_POINTS:
+            numbers = numbers.tail(MAX_CHART_POINTS)
         corr = numbers.corr().fillna(0.0).round(2)
         # plotext 5.3.2's draw_heatmap prints the frame to stdout (library
         # bug); suppress it so it doesn't corrupt the TUI display.
@@ -271,7 +274,10 @@ class BoxPlot(PlotWidget):
             labels: list[str] = []
             data: list[list[float]] = []
             for cat, group in grouped:
-                vals = numeric(group).dropna().tolist()
+                vals = numeric(group).dropna()
+                if len(vals) > MAX_CHART_POINTS:
+                    vals = vals.tail(MAX_CHART_POINTS)
+                vals = vals.tolist()
                 if not vals:
                     continue
                 labels.append(str(cat))

@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- `sql` (DuckDB) sources accept `--max-rows`, matching `sqlite`.
+
+### Changed
+- Read-only CLI commands (`themes`, `charts`, `config path`) no longer
+  create the user config file as a side effect; it's created on TUI launch.
+- `--max-rows` help text reflects all supported sources; dashboards no
+  longer pass it to socket sources (it was silently ignored).
+
+### Removed
+- Dead code: `Store.subscribe`/`Listener` (no consumers), `Registry.add`,
+  `Transform.extra`, `Meta.status`/`Meta.detail`, `Source.params`,
+  single-column `sort_frame` (superseded by `sort_frame_multi`), and the
+  pre-validation query pass in `Transform.apply` (`where` now runs once).
+
+### Performance
+- File sources cache their date-column decisions, so refresh ticks re-parse
+  only known date columns instead of re-sampling every string column.
+- Parquet reads stream the first row batch when `max_rows` is set (memory
+  stays O(max_rows) instead of O(file size)).
+- Table skips the column rebuild when the visible column set is unchanged.
+- Histogram, box plot, heatmap, and sparkline cap the rows fed to plotext
+  (heatmap no longer recomputes a full-frame correlation per refresh tick).
+
 ## [0.6.0] - 2026-07-29
 
 ### Added

@@ -223,3 +223,11 @@ def test_autoparse_dates_handles_empty_string_columns():
     frame = pd.DataFrame({"empty": ["", "", ""]})
     result = _autoparse_dates(frame)
     assert "empty" in result.columns
+
+
+def test_file_source_parquet_limits_rows(sample_parquet):
+    spec = SourceSpec(
+        kind="file", id="sample", params={"path": str(sample_parquet), "max_rows": 2}
+    )
+    dataset = create_source(spec).fetch()
+    assert dataset.meta.rows == 2

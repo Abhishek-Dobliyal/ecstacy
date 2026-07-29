@@ -37,6 +37,7 @@ def _launch(
 ) -> None:
     from ecstacy.app import EcstacyApp
 
+    ensure_user_config()
     config = load_app_config({"theme": theme, "refresh": refresh, "max_rows": max_rows})
     EcstacyApp(
         config,
@@ -58,13 +59,12 @@ def default(
     if version:
         typer.echo(__version__)
         raise typer.Exit()
-    ensure_user_config()
     if ctx.invoked_subcommand is None:
         _launch(theme=theme, no_splash=no_splash)
 
 
 def _max_rows_option() -> typer.Option:
-    return typer.Option(None, "--max-rows", help="Maximum rows to load from file/REST")
+    return typer.Option(None, "--max-rows", help="Maximum rows to load (file/REST/SQL sources)")
 
 
 def _refresh_option() -> typer.Option:
@@ -247,6 +247,7 @@ def sql(
     query: str = typer.Argument(..., help="SQL query (DuckDB)"),
     db: str = typer.Option(":memory:", "--db", help="DuckDB file or :memory:"),
     chart: str = typer.Option("table", "--chart"),
+    max_rows: int | None = _max_rows_option(),
     theme: str | None = typer.Option(None, "--theme"),
     refresh: str | None = _refresh_option(),
     head: int | None = _head_option(),
@@ -255,6 +256,8 @@ def sql(
     no_splash: bool = typer.Option(True, "--no-splash/--splash"),
 ) -> None:
     spec = SourceSpec(kind="sql", id="sql", params={"query": query, "db": db})
+    if max_rows is not None:
+        spec.params["max_rows"] = max_rows
     if _is_headless(head, tail, export):
         _run_headless(spec, head, tail, export)
         return

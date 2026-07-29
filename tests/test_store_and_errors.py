@@ -28,24 +28,6 @@ def test_store_ids():
     assert set(store.ids()) == {"a", "b"}
 
 
-def test_store_subscribe_receives_updates():
-    store = Store()
-    received: list[tuple[str, DataSet]] = []
-    store.subscribe(lambda sid, ds: received.append((sid, ds)))
-    store.set("metrics", _make_dataset("metrics"))
-    assert len(received) == 1
-    assert received[0][0] == "metrics"
-
-
-def test_store_unsubscribe_stops_notifications():
-    store = Store()
-    received: list[tuple[str, DataSet]] = []
-    unsub = store.subscribe(lambda sid, ds: received.append((sid, ds)))
-    unsub()
-    store.set("metrics", _make_dataset("metrics"))
-    assert len(received) == 0
-
-
 def test_store_set_overwrites_previous():
     store = Store()
     store.set("metrics", _make_dataset("metrics", rows=2))

@@ -34,7 +34,7 @@ class AppConfig(BaseModel):
     @field_validator("max_rows")
     @classmethod
     def _validate_max_rows(cls, value: int) -> int:
-        if value is not None and value < 0:
+        if value < 0:
             raise ValueError("max_rows must be non-negative")
         return value
 

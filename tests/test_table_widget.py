@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 
 from ecstacy.config import defaults
-from ecstacy.widgets.table import filter_frame, sort_frame, sort_frame_multi
+from ecstacy.widgets.table import filter_frame, sort_frame_multi
 
 
 def _sample() -> pd.DataFrame:
@@ -38,34 +38,28 @@ def test_filter_frame_no_match():
     assert len(result) == 0
 
 
-def test_sort_frame_ascending():
-    result = sort_frame(_sample(), "value", ascending=True)
+def test_sort_frame_multi_ascending():
+    result = sort_frame_multi(_sample(), [("value", True)])
     assert list(result["value"]) == [8.0, 10.0, 12.0, 15.0]
 
 
-def test_sort_frame_descending():
-    result = sort_frame(_sample(), "value", ascending=False)
+def test_sort_frame_multi_descending():
+    result = sort_frame_multi(_sample(), [("value", False)])
     assert list(result["value"]) == [15.0, 12.0, 10.0, 8.0]
-
-
-def test_sort_frame_missing_column_returns_unchanged():
-    frame = _sample()
-    result = sort_frame(frame, "missing", ascending=True)
-    assert len(result) == 4
 
 
 def test_filter_then_sort():
     filtered = filter_frame(_sample(), "us")
-    result = sort_frame(filtered, "value", ascending=False)
+    result = sort_frame_multi(filtered, [("value", False)])
     assert list(result["value"]) == [12.0, 10.0]
 
 
-def test_sort_frame_covers_all_rows_not_just_head():
+def test_sort_frame_multi_covers_all_rows_not_just_head():
     rows = []
     for i in range(2000):
         rows.append({"region": "r" + str(i), "value": float(2000 - i)})
     frame = pd.DataFrame(rows)
-    sorted_frame = sort_frame(frame, "value", ascending=True)
+    sorted_frame = sort_frame_multi(frame, [("value", True)])
     capped = sorted_frame.head(defaults.DEFAULT_MAX_ROWS)
     assert capped.iloc[0]["value"] == 1.0
     assert capped.iloc[-1]["value"] == float(defaults.DEFAULT_MAX_ROWS)

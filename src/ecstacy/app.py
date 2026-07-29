@@ -142,11 +142,8 @@ class EcstacyApp(App):
         self._inflight_opens.discard(key)
         self.store.set(spec.id, dataset)
         self._remember(source.describe(), spec)
-        refresh_seconds = 0.0
-        try:
-            refresh_seconds = parse_duration(self.config.refresh)
-        except Exception:
-            refresh_seconds = 0.0
+        # AppConfig validates refresh at load time, so this always parses
+        refresh_seconds = parse_duration(self.config.refresh)
         self.push_screen(
             ChartScreen(
                 dataset,

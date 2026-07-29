@@ -49,8 +49,6 @@ class Meta:
     kind: str
     rows: int = 0
     fetched_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    status: str = "ok"
-    detail: str = ""
     raw: Any = None
 
 

@@ -91,7 +91,6 @@ class DashboardScreen(Screen):
         self._panel_index = 0
         self._multi_panel = True
         self._scheduler: Scheduler | None = None
-        self._interval: float = 0.0
         self._jobs: list[Job] = []
         self._panel_widgets: dict[int, Widget] = {}
         self._panels_built = False
@@ -121,7 +120,7 @@ class DashboardScreen(Screen):
 
     def _start_scheduler(self) -> None:
         self._stop_scheduler()
-        self._interval = self._parse_refresh_interval()
+        interval = self._parse_refresh_interval()
         self._scheduler = Scheduler(self.app)
         for spec in self.dashboard.sources:
             enriched = self._with_max_rows(spec)
@@ -136,7 +135,7 @@ class DashboardScreen(Screen):
             self._sources[spec.id] = source
             job = Job(
                 source=source,
-                interval=self._interval,
+                interval=interval,
                 on_data=self._on_data(spec.id),
                 on_error=self._on_error(spec.id),
             )
@@ -259,7 +258,8 @@ class DashboardScreen(Screen):
             self._scheduler.run_now(job)
 
     def _with_max_rows(self, spec: SourceSpec) -> SourceSpec:
-        if self._max_rows is None or spec.kind == "sql":
+        # sql queries express their own row limits; socket has no max_rows
+        if self._max_rows is None or spec.kind in ("sql", "socket"):
             return spec
         params = dict(spec.params)
         params.setdefault("max_rows", self._max_rows)

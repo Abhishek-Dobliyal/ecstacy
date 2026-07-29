@@ -28,7 +28,6 @@ class Source(ABC):
 
     def __init__(self, id: str, **params: Any) -> None:
         self.id = id
-        self.params = params
 
     @abstractmethod
     def fetch(self) -> DataSet:

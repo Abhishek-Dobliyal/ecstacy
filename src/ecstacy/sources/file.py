@@ -51,9 +51,29 @@ class FileSource(Source):
         )
         self.max_rows = max_rows
         self.sheet = sheet
+        # which columns the first fetch identified as dates; refresh ticks
+        # re-parse only these instead of re-sampling every string column
+        self._date_columns: list[str] | None = None
 
     def describe(self) -> str:
         return "file:<stdin>" if self.is_stdin else f"file:{self.path.name}"
+
+    def _parse_dates(self, frame: pd.DataFrame) -> pd.DataFrame:
+        if self._date_columns is None:
+            frame = _autoparse_dates(frame)
+            self._date_columns = [
+                str(c) for c in frame.columns if pdt.is_datetime64_any_dtype(frame[c])
+            ]
+            return frame
+        import warnings
+
+        for name in self._date_columns:
+            if name not in frame.columns or pdt.is_datetime64_any_dtype(frame[name]):
+                continue
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", UserWarning)
+                frame[name] = pd.to_datetime(frame[name], errors="coerce")
+        return frame
 
     def fetch(self) -> DataSet:
         if self.is_stdin:
@@ -83,7 +103,7 @@ class FileSource(Source):
                 f"failed to read {self.path} as {self.fmt}: {exc}", source_id=self.id
             ) from exc
         frame = _deduplicate_columns(frame)
-        frame = _autoparse_dates(frame)
+        frame = self._parse_dates(frame)
         return DataSet.from_dataframe(frame, source_id=self.id, kind=self.kind, raw=raw)
 
     def _fetch_stdin(self) -> DataSet:
@@ -126,15 +146,19 @@ class FileSource(Source):
         if self.max_rows is not None:
             frame = frame.head(self.max_rows)
         frame = _deduplicate_columns(frame)
-        frame = _autoparse_dates(frame)
+        frame = self._parse_dates(frame)
         return DataSet.from_dataframe(frame, source_id=self.id, kind=self.kind, raw=raw)
 
 
 def _read_parquet(path: Path, max_rows: int | None) -> pd.DataFrame:
-    frame = pd.read_parquet(path)
-    if max_rows is not None:
-        frame = frame.head(max_rows)
-    return frame
+    if max_rows is None:
+        return pd.read_parquet(path)
+    import pyarrow.parquet as pq
+
+    # stream the first batch only: memory stays O(max_rows) not O(file size)
+    for batch in pq.ParquetFile(path).iter_batches(batch_size=max_rows):
+        return batch.to_pandas().head(max_rows)
+    return pd.read_parquet(path)  # 0-row file: keep the schema
 
 
 def _read_json(path: Path, max_rows: int | None = None) -> tuple[pd.DataFrame, Any]:

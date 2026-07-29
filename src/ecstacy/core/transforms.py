@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import pandas as pd
@@ -15,11 +15,6 @@ class TransformError(EcstacyError):
 def _validate_transform_inputs(frame: pd.DataFrame, transform: Transform) -> None:
     if transform.limit is not None and transform.limit < 0:
         raise TransformError(f"limit must be non-negative, got {transform.limit}")
-    if transform.where:
-        try:
-            frame.query(transform.where)
-        except Exception as exc:
-            raise TransformError(f"invalid where clause {transform.where!r}: {exc}") from exc
     if transform.group_by:
         missing = [c for c in transform.group_by if c not in frame.columns]
         if missing:
@@ -40,13 +35,17 @@ class Transform:
     resample: str | None = None
     time_column: str | None = None
     limit: int | None = None
-    extra: dict[str, Any] = field(default_factory=dict)
 
     def apply(self, frame: pd.DataFrame) -> pd.DataFrame:
         _validate_transform_inputs(frame, self)
         result = frame
         if self.where:
-            result = result.query(self.where)
+            try:
+                result = result.query(self.where)
+            except Exception as exc:
+                raise TransformError(
+                    f"invalid where clause {self.where!r}: {exc}"
+                ) from exc
         if self.resample and self.time_column:
             result = _resample(result, self.time_column, self.resample, self.agg)
         elif self.group_by:

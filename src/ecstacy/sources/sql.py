@@ -13,10 +13,18 @@ from ecstacy.sources.base import Source, SourceError
 class SqlSource(Source):
     kind = "sql"
 
-    def __init__(self, id: str, query: str, db: str = ":memory:", **params: Any) -> None:
+    def __init__(
+        self,
+        id: str,
+        query: str,
+        db: str = ":memory:",
+        max_rows: int | None = None,
+        **params: Any,
+    ) -> None:
         super().__init__(id=id, query=query, db=db, **params)
         self.query = query
         self.db = db
+        self.max_rows = max_rows
         self._conn: duckdb.DuckDBPyConnection | None = None
 
     def describe(self) -> str:
@@ -48,4 +56,6 @@ class SqlSource(Source):
         finally:
             if self.db == ":memory:":
                 connection.close()
+        if self.max_rows is not None:
+            frame = frame.head(self.max_rows)
         return DataSet.from_dataframe(frame, source_id=self.id, kind=self.kind)

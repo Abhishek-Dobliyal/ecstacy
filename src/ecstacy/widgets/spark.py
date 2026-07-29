@@ -22,7 +22,7 @@ class SparklineView(PlotWidget):
         if series.empty:
             plt.title(f"no data for {column}")
             return
-        values = series.tolist()[-_MAX_POINTS:]
+        values = series.iloc[-_MAX_POINTS:].tolist()
         color = _hex_rgb(self.app.current_theme.primary)
         plt.plot(values, marker="braille", color=color)
         plt.grid(False)

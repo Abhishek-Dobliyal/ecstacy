@@ -117,9 +117,7 @@ def _parse_message(raw: Any, orjson) -> Any:
             return raw.decode(errors="replace")
     if isinstance(raw, str):
         try:
-            import orjson as _orjson
-
-            return _orjson.loads(raw)
+            return orjson.loads(raw)
         except Exception:
             return raw
     return raw

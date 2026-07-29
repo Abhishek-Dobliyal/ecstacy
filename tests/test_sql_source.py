@@ -17,3 +17,13 @@ def test_sql_source_invalid_query():
     spec = SourceSpec(kind="sql", id="sql", params={"query": "select * from missing_table"})
     with pytest.raises(SourceError):
         create_source(spec).fetch()
+
+
+def test_sql_source_limits_rows():
+    spec = SourceSpec(
+        kind="sql",
+        id="t",
+        params={"query": "select * from range(10)", "max_rows": 3},
+    )
+    dataset = create_source(spec).fetch()
+    assert dataset.meta.rows == 3
