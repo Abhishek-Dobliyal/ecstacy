@@ -55,8 +55,7 @@ class FileSource(Source):
         self.max_rows = max_rows
         # "--sheet 0" means index 0, not a sheet literally named "0"
         self.sheet = int(sheet) if isinstance(sheet, str) and sheet.isdigit() else sheet
-        # which columns the first fetch identified as dates; refresh ticks
-        # re-parse only these instead of re-sampling every string column
+        # Re-parse only known date columns on refresh.
         self._date_columns: list[str] | None = None
 
     def describe(self) -> str:
@@ -159,12 +158,7 @@ class FileSource(Source):
 def _read_duckdb(
     path: Path, fmt: str, max_rows: int | None, keep_raw: bool = False
 ) -> tuple[pd.DataFrame, Any]:
-    """Universal reader: pushes LIMIT + type inference into DuckDB's native
-    C++/Rust parsers. Handles csv, tsv, parquet, json, ndjson.
-
-    Returns ``(frame, raw)`` where ``raw`` is the parsed JSON payload for
-    the ``json`` format when ``keep_raw`` is set, or ``None`` otherwise.
-    """
+    """Read a file via DuckDB's native parsers. Returns (frame, raw_json_or_None)."""
     limit = f" LIMIT {max_rows}" if max_rows is not None else ""
     path_str = str(path).replace("'", "''")
     if fmt == "csv":
@@ -184,15 +178,10 @@ def _read_duckdb(
         frame = conn.sql(query).df()
     finally:
         conn.close()
-    # DuckDB returns a dummy ``column0`` for a zero-byte file instead of
-    # raising EmptyDataError like pandas did. Normalize to the old behavior
-    # so the caller raises a SourceError.
+    # DuckDB emits a dummy column0 for zero-byte files; surface as EmptyDataError.
     if frame.empty and list(frame.columns) == ["column0"]:
         raise pd.errors.EmptyDataError(str(path))
-    # JSON envelopes like {"data": [...]} arrive as a single-row, single-
-    # column frame whose value is a list of structs. Unnest it into a flat
-    # frame so downstream code sees the records, matching the old orjson +
-    # json_normalize heuristic.
+    # Unnest JSON envelope frames (e.g. {"data": [...]}) to flat records.
     raw: Any = None
     if fmt == "json":
         if _looks_like_envelope(frame):

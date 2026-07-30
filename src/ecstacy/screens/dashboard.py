@@ -134,8 +134,7 @@ class DashboardScreen(Screen):
         self._stop_scheduler()
         interval = self._parse_refresh_interval()
         self._scheduler = Scheduler(self.app, is_active=lambda: self.app.screen is self)
-        # Precompute which sources need the raw payload (only if a panel
-        # using the json-tree viz references them).
+        # Determine which sources need raw JSON for json-tree panels.
         json_sources = {
             panel.source
             for panel in self.dashboard.panels
@@ -167,9 +166,7 @@ class DashboardScreen(Screen):
             self._scheduler.add(job)
 
     def _start_stream(self, source: Source, source_id: str, keep_raw: bool) -> None:
-        # Seed with an initial one-shot fetch so panels show data immediately
-        # instead of waiting for the first stream batch (which can take up to
-        # the socket timeout, default 5s).
+        # Seed with a one-shot fetch to avoid waiting for first stream batch.
         def _seed() -> None:
             try:
                 dataset = source.fetch(keep_raw=keep_raw)
@@ -194,8 +191,7 @@ class DashboardScreen(Screen):
         stream = source.stream(keep_raw=keep_raw)
         try:
             async for dataset in stream:
-                # Gate like the polling scheduler: skip updates while a modal
-                # is on top so we don't re-render invisibly.
+                # Skip updates when a modal is on top.
                 if self.app.screen is not self:
                     continue
                 self._on_data(source_id)(dataset)
@@ -258,8 +254,7 @@ class DashboardScreen(Screen):
         dataset = self._datasets.get(source_id)
         if dataset is None:
             return
-        # a panel whose widget couldn't be built yet (source was missing at
-        # build time, or a viz/transform error) needs a full rebuild instead
+        # Missing or errored panels need a full rebuild.
         needs_rebuild = any(
             panel.source == source_id and idx not in self._panel_widgets
             for idx, panel in enumerate(self.dashboard.panels)
@@ -276,9 +271,7 @@ class DashboardScreen(Screen):
             return
 
         def _work() -> None:
-            # transforms + schema inference run off the UI thread; the
-            # per-panel cache skips both when the upstream dataset hasn't
-            # changed since the last tick.
+            # Offload transforms to a thread; skip via cache when unchanged.
             results: list[tuple[int, DataSet | TransformError]] = []
             upstream_id = id(dataset)
             for idx, panel in targets:
@@ -351,8 +344,7 @@ class DashboardScreen(Screen):
         else:
             await self._render_single(holder)
         self._panels_built = True
-        # Rebuilding panels destroys the previously focused widget; reset focus
-        # so panel search Inputs don't swallow the n/p/arrow screen bindings.
+        # Reset focus so rebuild doesn't swallow navigation bindings.
         self.set_focus(None)
 
     async def _render_multi(self, holder: Container) -> None:
@@ -406,14 +398,9 @@ class DashboardScreen(Screen):
     def _build_transformed(
         self, panel: PanelConfig, dataset: DataSet, frame: pd.DataFrame
     ) -> DataSet:
-        """Build a DataSet from a transformed frame, optimizing schema
-        inference for transforms that don't change the column set.
-
-        - No transform: reuse the upstream dataset directly.
-        - where-only (filter rows): same schema, fewer rows — reuse schema.
-        - select/limit-only (subset columns): schema is a subset — slice it.
-        - group_by/agg/resample: columns change — full infer_schema.
-        """
+        """Build a DataSet from a transformed frame. Optimizes schema reuse
+        for where-only and select/limit transforms; runs full inference for
+        group/agg/resample."""
         has_transform = (
             panel.where
             or panel.group_by

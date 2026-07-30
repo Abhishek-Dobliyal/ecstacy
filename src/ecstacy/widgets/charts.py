@@ -11,14 +11,11 @@ from pandas.api import types as pdt
 from ecstacy.core import registry
 from ecstacy.widgets.base import ColumnMapping, PlotWidget, numeric
 
-# Kept as a module-level constant for benchmarks and tests that need a
-# fixed point count.  The actual render path uses PlotWidget._budget().
+# Used by benchmarks; the TUI uses PlotWidget._budget() instead.
 MAX_CHART_POINTS = 1000
 
 
-# -----------------------------------------------------------------------
 # Helpers
-# -----------------------------------------------------------------------
 
 def _numeric_columns(frame: pd.DataFrame) -> list[str]:
     return [str(c) for c in frame.select_dtypes("number").columns]
@@ -115,9 +112,7 @@ def _decorate(plt, title: str, xlabel: str | None = None, ylabel: str | None = N
         plt.ylabel(ylabel)
 
 
-# -----------------------------------------------------------------------
 # LTTB downsampling
-# -----------------------------------------------------------------------
 
 def _lttb(
     x: np.ndarray, y: np.ndarray, threshold: int
@@ -179,9 +174,7 @@ def _downsample_xy(
     return _lttb(x, y, threshold)
 
 
-# -----------------------------------------------------------------------
 # Payloads
-# -----------------------------------------------------------------------
 
 @dataclass
 class _LineSeries:
@@ -246,9 +239,7 @@ class _ProportionPayload:
     title: str = ""
 
 
-# -----------------------------------------------------------------------
 # Line
-# -----------------------------------------------------------------------
 
 @registry.viz.register("line")
 class LineChart(PlotWidget):
@@ -259,8 +250,7 @@ class LineChart(PlotWidget):
         if not ycols:
             return _LinePayload(title="line chart needs a numeric column")
         xcol = mapping.x if mapping.x and mapping.x in frame.columns else None
-        # Truncate BEFORE dropna so NaN-removal runs on ≤budget rows, not
-        # the full frame.
+        # Truncate before dropna to operate on ≤budget rows.
         work = frame
         if len(work) > budget:
             work = work.tail(budget)
@@ -319,9 +309,7 @@ class LineChart(PlotWidget):
         _decorate(plt, payload.title, xlabel=payload.xlabel, ylabel=payload.ylabel)
 
 
-# -----------------------------------------------------------------------
 # Bar
-# -----------------------------------------------------------------------
 
 @registry.viz.register("bar")
 class BarChart(PlotWidget):
@@ -370,9 +358,7 @@ class BarChart(PlotWidget):
         _decorate(plt, payload.title, xlabel=payload.xlabel, ylabel=payload.ylabel)
 
 
-# -----------------------------------------------------------------------
 # Histogram
-# -----------------------------------------------------------------------
 
 @registry.viz.register("histogram")
 class Histogram(PlotWidget):
@@ -409,9 +395,7 @@ class Histogram(PlotWidget):
         _decorate(plt, payload.title, xlabel=payload.xlabel, ylabel=payload.ylabel)
 
 
-# -----------------------------------------------------------------------
 # Scatter
-# -----------------------------------------------------------------------
 
 @registry.viz.register("scatter")
 class Scatter(PlotWidget):
@@ -457,9 +441,7 @@ class Scatter(PlotWidget):
         _decorate(plt, payload.title, xlabel=payload.xlabel, ylabel=payload.ylabel)
 
 
-# -----------------------------------------------------------------------
 # Heatmap
-# -----------------------------------------------------------------------
 
 @registry.viz.register("heatmap")
 class Heatmap(PlotWidget):
@@ -485,9 +467,7 @@ class Heatmap(PlotWidget):
         _decorate(plt, payload.title)
 
 
-# -----------------------------------------------------------------------
 # Box
-# -----------------------------------------------------------------------
 
 @registry.viz.register("box")
 class BoxPlot(PlotWidget):
@@ -547,9 +527,7 @@ class BoxPlot(PlotWidget):
         _decorate(plt, payload.title, ylabel=payload.ylabel)
 
 
-# -----------------------------------------------------------------------
 # Proportion
-# -----------------------------------------------------------------------
 
 @registry.viz.register("proportion")
 class ProportionChart(PlotWidget):
@@ -591,7 +569,7 @@ class ProportionChart(PlotWidget):
             return
         palette = [theme.primary, theme.accent, theme.secondary]
         colors = [_hex_rgb(palette[i % len(palette)]) for i in range(len(payload.labels))]
-        # plotext has no pie primitive; horizontal bars are the proportion view
+        # Horizontal bars as a pie substitute.
         plt.bar(
             payload.labels, payload.values,
             orientation="horizontal", color=colors, marker="braille",

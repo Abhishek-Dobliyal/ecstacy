@@ -130,9 +130,7 @@ class ChartScreen(Screen):
         self._update_border(dataset)
 
     def action_escape(self) -> None:
-        """Escape exits the search/query input first; only pops the screen
-        if no input is focused. This gives the standard "press escape once
-        to exit search, press again to go back" UX."""
+        """Exit search/query input first; pop screen when no input is focused."""
         focused = self.focused
         if isinstance(focused, Input):
             if self._active_widget is not None:
@@ -296,12 +294,7 @@ class ChartScreen(Screen):
         return result
 
     def _focus_content(self, widget: Widget) -> None:
-        """Focus the interactive part of the newly rendered widget.
-
-        Without this, auto-focus lands on the transform-bar Input whenever the
-        previously focused widget is unmounted, and keys like n/p/arrows get
-        swallowed by the Input instead of reaching the screen bindings.
-        """
+        """Focus the widget's interactive part to prevent Input from swallowing bindings."""
         tables = widget.query(DataTable)
         if tables:
             self.set_focus(tables.first())
@@ -311,11 +304,9 @@ class ChartScreen(Screen):
     async def _render_current(self) -> None:
         holder = self.query_one("#viz-holder", Container)
         name = self.names[self.index]
-        # Hide the currently active widget before showing the new one.
         if self._active_widget is not None:
             self._active_widget.display = False
-        # Lazily create and pool widgets; reuse on subsequent visits so
-        # we avoid the mount/unmount cost on every n/p cycle.
+        # Pool widgets to avoid mount/unmount on every cycle.
         if name not in self._viz_pool:
             widget = create_viz(name)
             await holder.mount(widget)
@@ -324,8 +315,7 @@ class ChartScreen(Screen):
             widget = self._viz_pool[name]
             widget.display = True
         self._active_widget = widget
-        # Show the search bar only for table view; sync its value from
-        # the pooled widget so a previous search survives viz cycles.
+        # Show search bar for table only; preserve previous search.
         search_bar = self.query_one("#search-bar", Input)
         is_table = hasattr(widget, "set_search")
         search_bar.display = is_table

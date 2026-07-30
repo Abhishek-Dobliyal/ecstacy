@@ -141,9 +141,7 @@ class ExportScreen(ModalScreen):
         self.dismiss(None)
 
 
-# Fields shown per viz in the chart mapping picker.  Maps viz name to a
-# list of (field_name, label, is_multi) tuples.  Fields not listed here
-# are preserved from the existing mapping.
+# Per-viz field descriptor: (field_name, label, is_multi).
 VIZ_FIELDS: dict[str, list[tuple[str, str, bool]]] = {
     "line": [("x", "X axis", False), ("y", "Y series (comma-sep)", True)],
     "bar": [("category", "Category", False), ("value", "Value", False)],
@@ -159,13 +157,7 @@ VIZ_NO_MAPPING = {"heatmap", "table", "summary", "json"}
 
 
 class ChartMappingScreen(ModalScreen):
-    """Modal for picking which columns a chart plots.
-
-    Shows only the fields relevant to the current viz type.  Column
-    fields are ``Select`` dropdowns with an "(auto)" option that sets
-    the field to ``None``.  On confirm, a new ``ColumnMapping`` is
-    built from the existing one with picked fields overwritten.
-    """
+    """Modal for selecting columns per viz type. Builds a new ColumnMapping with auto-fallback."""
 
     DEFAULT_CSS = """
     ChartMappingScreen {

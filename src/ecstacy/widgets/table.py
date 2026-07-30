@@ -173,9 +173,7 @@ class TableView(Vertical):
             self._hidden_columns = set()
             self._columns_signature = new_sig
             self._loaded_count = 0
-        # The string-frame cache is keyed on frame identity in
-        # _string_frame_cached; let it invalidate naturally when the frame
-        # object changes (refresh tick) instead of busting it here.
+        # String cache invalidates on frame identity change; no manual bust needed.
         if self.is_mounted:
             self._frame = new_frame
             self._populate()
@@ -183,8 +181,7 @@ class TableView(Vertical):
             self._pending_dataset = dataset
 
     def _populate_after_debounce(self) -> None:
-        # filter/sort run off the UI thread; the generation counter discards
-        # results that arrive after a newer state
+        # Offload filter/sort to a thread; discard stale results via gen counter.
         self._search_gen += 1
         gen = self._search_gen
         search = self._search_value
@@ -315,8 +312,7 @@ class TableView(Vertical):
         )
 
     def _render_table_rows(self) -> None:
-        """Load rows up to _loaded_count + _PAGE_SIZE from _full_view into the
-        DataTable, starting from the current _loaded_count."""
+        """Append the next page of rows from _full_view to the DataTable."""
         if self._full_view is None or self._loading:
             return
         self._loading = True

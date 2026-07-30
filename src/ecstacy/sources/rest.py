@@ -53,8 +53,7 @@ class RestSource(Source):
         if not force and self._ttl > 0 and self._cache is not None:
             expires_at, cached = self._cache
             if time.monotonic() < expires_at:
-                # Serve from cache unless the caller needs raw and we don't
-                # have it.
+                # Serve from cache unless raw payload is needed and missing.
                 if cached.meta.raw is not None or not keep_raw:
                     return cached
         if self._client is None:

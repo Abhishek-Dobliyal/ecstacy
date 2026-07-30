@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import pandas as pd
+from rich.text import Text
+from textual.app import RenderResult
 from textual_plotext import PlotextPlot
 
 from ecstacy.core.dataset import DataSet
@@ -34,8 +36,6 @@ def auto_mapping(dataset: DataSet, viz_name: str) -> ColumnMapping:
     mapping.category = cats[0] if cats else (times[0] if times else None)
     if viz_name == "scatter":
         mapping.x = values[0] if values else None
-        # leave y empty with a single value column; plotting x against
-        # itself would show a meaningless diagonal
         mapping.y = values[1:2] if len(values) > 1 else []
     else:
         mapping.x = times[0] if times else (cats[0] if cats else None)
@@ -67,10 +67,11 @@ class PlotWidget(PlotextPlot):
         self._render_data: object | None = None
         self._render_key: tuple | None = None
         self._render_gen = 0
+        self._render_size: tuple[int, int] | None = None
         self._auto_mapping_cache: ColumnMapping | None = None
         self._auto_mapping_key: tuple | None = None
 
-    # -- public API --------------------------------------------------------
+    # public API
 
     def set_data(self, dataset: DataSet, mapping: ColumnMapping | None = None) -> None:
         self._dataset = dataset
@@ -89,21 +90,18 @@ class PlotWidget(PlotextPlot):
 
     def on_mount(self) -> None:
         super().on_mount()
-        self.redraw()
         self.app.theme_changed_signal.subscribe(self, self._on_theme_changed)
 
-    # -- budget -----------------------------------------------------------
+    # budget
 
     def _budget(self) -> int:
-        """Terminal-budget downsampling target: ~2x the widget width in
-        x-positions, clamped to [200, 2000].  Falls back to 1000 before
-        the widget is sized."""
+        """Downsample target, clamped to [200, 2000]."""
         w = self.size.width
         if w <= 0:
             return _BUDGET_FALLBACK
         return min(max(w * 2, 200), _BUDGET_CAP)
 
-    # -- render cache & worker dispatch -----------------------------------
+    # render cache & worker dispatch
 
     def _content_key(self) -> tuple:
         m = self._mapping
@@ -120,8 +118,6 @@ class PlotWidget(PlotextPlot):
         )
 
     def _on_theme_changed(self, _theme) -> None:
-        # Theme change only affects colors — re-paint the cached payload
-        # without re-running _prepare.
         if self._render_data is not None:
             self._paint_from_cache()
 
@@ -158,17 +154,25 @@ class PlotWidget(PlotextPlot):
             return
         plt = self.plt
         plt.clear_figure()
-        try:
-            plt.theme("dark" if self.app.current_theme.dark else "pro")
-        except Exception:
-            plt.theme("dark")
+        self._render_size = None
         try:
             self._paint(plt, self._render_data, self.app.current_theme)
         except Exception as error:
             plt.title(f"cannot render: {error}")
         self.refresh()
 
-    # -- subclass hooks ----------------------------------------------------
+    # Textual render hook
+
+    def render(self) -> RenderResult:
+        w, h = self.size.width, self.size.height
+        if self._render_size != (w, h):
+            self._plot.plotsize(w, h)
+            self._plot._set_size(w, h)
+            self._render_size = (w, h)
+        self._plot.theme(self._get_plotext_theme_name(self.app.theme))
+        return Text.from_ansi(self._plot.build())
+
+    # subclass hooks
 
     def _prepare(self, frame: pd.DataFrame, mapping: ColumnMapping, budget: int) -> object:
         raise NotImplementedError

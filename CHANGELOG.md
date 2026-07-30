@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.3] - 2026-07-30
+
+### Fixed
+- Input lag after chart plotting: eliminated redundant render passes by
+  removing a duplicate plotext `theme()` call in `_paint_from_cache`,
+  skipping the wasted `redraw()` in `on_mount` (set_data follows
+  immediately), and caching widget dimensions in `render()` so `plotsize`
+  and `_set_size` only run when the terminal resizes.
+- Comment cleanup across 14 source files: section divider banners,
+  multi-line inline comments, and verbose docstrings shortened to
+  one-liners.
+
 ## [0.10.2] - 2026-07-30
 
 ### Fixed

@@ -194,8 +194,7 @@ class EcstacyApp(App):
         mapping: ColumnMapping | None,
     ) -> None:
         origin = self._inflight_opens.pop(key, None)
-        # If the user navigated away from the screen that initiated the open
-        # while the fetch ran, don't push a chart on top of wherever they are.
+        # Don't push a chart if the user navigated away while fetching.
         if origin is not None and self.screen is not origin:
             return
         self._remember(source.describe(), spec)

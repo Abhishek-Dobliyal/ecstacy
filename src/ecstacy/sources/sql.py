@@ -28,9 +28,7 @@ class SqlSource(Source):
         return f"sql:{self.db}"
 
     def _get_connection(self) -> duckdb.DuckDBPyConnection:
-        # Cache file-backed connections across refresh ticks. :memory:
-        # databases intentionally stay fresh per fetch so self-contained
-        # queries (incl. DDL) behave the same on every tick.
+        # Cache file-backed connections; :memory: stays fresh per fetch.
         if self.db == ":memory:":
             return duckdb.connect(self.db)
         if self._conn is None:

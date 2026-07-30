@@ -67,9 +67,7 @@ class DataSet:
         raw: Any = None,
         diet: bool = True,
     ) -> DataSet:
-        # Duplicate column names break schema inference (frame[name] returns
-        # a DataFrame, which has no .dtype); dedupe defensively for sources
-        # that don't do it themselves (rest/sql/sqlite/socket).
+        # Defensive dedupe for sources that produce duplicate column names.
         frame = deduplicate_columns(frame)
         if diet:
             frame = _diet_dtypes(frame)
@@ -116,10 +114,7 @@ def _infer_role(series: pd.Series) -> Role:
 
 
 def _diet_dtypes(frame: pd.DataFrame) -> pd.DataFrame:
-    """One-pass memory diet: downcast integers/floats to the narrowest width
-    and convert low-cardinality object columns to ``category``. Datetime and
-    bool columns are left alone. Returns the same frame when nothing changes.
-    """
+    """Downcast integers/floats, convert low-cardinality objects to category."""
     if frame.empty:
         return frame
     changed = False

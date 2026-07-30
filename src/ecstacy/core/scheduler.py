@@ -23,12 +23,8 @@ class Job:
 
 
 class Scheduler:
-    """Runs source fetches on pool threads and delivers results to the UI.
-
-    A job never overlaps with itself: ticks that arrive while the previous
-    fetch is still running are skipped, so results can't arrive out of order
-    and slow sources don't pile up threads.
-    """
+    """Runs fetches on pool threads, delivering results to the UI. Skips ticks
+    when the previous fetch is still running so jobs never self-overlap."""
 
     def __init__(self, app, is_active: Callable[[], bool] | None = None) -> None:
         self._app = app
@@ -52,8 +48,7 @@ class Scheduler:
         if self._is_active is not None and not self._is_active():
             return
         job.in_flight = True
-        # Prune finished workers so the list doesn't grow unbounded over a
-        # long refresh session.
+        # Prune finished workers.
         self._workers = [w for w in self._workers if not w.is_finished]
         worker = self._app.run_worker(
             lambda: self._fetch(job, force=force),

@@ -19,10 +19,7 @@ def user_config_path() -> Path:
 
 
 def ensure_user_config() -> Path:
-    """Create the user config directory and a default config file if missing.
-
-    Idempotent: never overwrites an existing config file. Returns the path.
-    """
+    """Create user config dir/file if missing (idempotent). Returns the path."""
     path = user_config_path()
     if path.exists():
         return path

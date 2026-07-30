@@ -34,8 +34,7 @@ class SqliteSource(Source):
     def _get_connection(self) -> sqlite3.Connection:
         if self.db == ":memory:":
             if self._conn is None:
-                # Scheduler fetches run on pool threads; allow cross-thread
-                # use and serialize access with self._lock.
+                # Cross-thread access; serialize with _lock.
                 self._conn = sqlite3.connect(self.db, check_same_thread=False)
             return self._conn
         return sqlite3.connect(self.db)
