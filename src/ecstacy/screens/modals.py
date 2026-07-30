@@ -186,7 +186,7 @@ class ChartMappingScreen(ModalScreen):
         margin: 0 0 0 0;
     }
     #mapping-buttons {
-        height: 1;
+        height: auto;
         align-horizontal: right;
         margin: 1 0 0 0;
     }

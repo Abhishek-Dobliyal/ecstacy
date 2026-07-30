@@ -235,6 +235,8 @@ class TableView(Vertical):
     ) -> None:
         if gen != self._search_gen or not self.is_mounted:
             return
+        table = self.query_one("#table-data", DataTable)
+        table.clear()  # rows only; column layout is unchanged
         self._full_view = full_view
         self._loaded_count = 0
         self._render_table_rows()

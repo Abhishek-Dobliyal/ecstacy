@@ -365,3 +365,44 @@ async def test_table_export_ignores_pagination():
         assert tv._loaded_count < 5000
         exported = tv._get_current_view()
         assert len(exported) == 5000
+
+
+@pytest.mark.asyncio
+async def test_search_clears_old_rows():
+    """After a search, the DataTable shows only filtered rows, not the
+    original rows appended on top."""
+    from textual.app import App
+    from textual.widgets import DataTable
+
+    from ecstacy.core.dataset import DataSet
+    from ecstacy.screens.chart import ChartScreen
+    from ecstacy.widgets.table import _PAGE_SIZE
+
+    df = pd.DataFrame(
+        {"region": ["us"] * 300 + ["eu"] * 300, "value": list(range(600))}
+    )
+    ds = DataSet.from_dataframe(df, source_id="s", kind="test")
+
+    class _App(App):
+        def on_mount(self):
+            self.push_screen(ChartScreen(ds, "table"))
+
+    app = _App()
+    async with app.run_test() as pilot:
+        for _ in range(8):
+            await pilot.pause()
+        tv = app.screen._active_widget
+        table = tv.query_one("#table-data", DataTable)
+        # Initially loaded _PAGE_SIZE rows
+        assert tv._loaded_count == _PAGE_SIZE
+        initial_row_count = table.row_count
+        # Trigger a search for "eu"
+        tv.set_search("eu")
+        # Wait for debounce + worker + delivery
+        await app.workers.wait_for_complete()
+        for _ in range(8):
+            await pilot.pause()
+        # The DataTable should now show only filtered rows (300 "eu" rows),
+        # capped at _PAGE_SIZE.  It must NOT show initial_row_count + 200.
+        assert table.row_count <= _PAGE_SIZE
+        assert table.row_count <= initial_row_count
