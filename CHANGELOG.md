@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.4] - 2026-07-30
+
+### Fixed
+- Invisible text in the search and query bars: Textual's `Input` has a
+  default `border: tall` that consumed both rows of the `height: 1`
+  allocation, leaving zero visible content rows. Added `border: none` to
+  both inputs so typed text and the cursor are now visible.
+- Escape from search: pressing `escape` while the search or query input
+  is focused now unfocuses it instead of popping the screen back to home.
+  Press `escape` again to go back. This is the standard "escape once to
+  exit search, escape again to exit" UX pattern.
+- Input bar layout: the search bar (was inside the table, below the viz
+  border title) and the query bar (was above the border title) are now
+  side by side in a single row above the viz-holder, each 50% width. The
+  search bar is hidden on non-table views. Search text persists across
+  viz cycles. Net savings of 2 rows vs the previous stacked layout.
+
 ## [0.9.3] - 2026-07-30
 
 ### Added

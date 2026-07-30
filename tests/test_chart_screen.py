@@ -4,6 +4,7 @@ import pandas as pd
 import pytest
 
 from ecstacy.core.dataset import DataSet
+from ecstacy.screens.chart import ChartScreen
 
 
 def _dataset() -> DataSet:
@@ -126,7 +127,55 @@ def test_transform_query_bound_to_ctrl_f():
 
     keys = [binding[0] for binding in ChartScreen.BINDINGS]
     assert "ctrl+f" in keys
-    assert "slash" not in keys
+    assert "slash" in keys
+
+
+@pytest.mark.asyncio
+async def test_escape_exits_search_not_screen():
+    """Pressing escape while the search input is focused unfocuses it
+    instead of popping the screen back to home."""
+    from textual.widgets import Input
+
+    app = _make_app()
+    async with app.run_test() as pilot:
+        await _settle(pilot)
+        screen = app.screen
+        assert isinstance(screen, ChartScreen)
+        # Focus the table search input (via the slash binding)
+        await pilot.press("/")
+        await _settle(pilot)
+        assert isinstance(screen.focused, Input)
+        # Press escape — should unfocus the input, not pop the screen
+        await pilot.press("escape")
+        await _settle(pilot)
+        assert app.screen is screen
+        assert not isinstance(screen.focused, Input)
+        # Press escape again — now it should pop back to home
+        await pilot.press("escape")
+        await _settle(pilot)
+        assert app.screen is not screen
+
+
+@pytest.mark.asyncio
+async def test_escape_exits_transform_bar_not_screen():
+    """Pressing escape while the transform-bar is focused unfocuses it
+    instead of popping the screen."""
+    from textual.widgets import Input
+
+    app = _make_app()
+    async with app.run_test() as pilot:
+        await _settle(pilot)
+        screen = app.screen
+        assert isinstance(screen, ChartScreen)
+        # Focus the transform bar via ctrl+f
+        await pilot.press("ctrl+f")
+        await _settle(pilot)
+        assert isinstance(screen.focused, Input)
+        # Press escape — should unfocus, not pop
+        await pilot.press("escape")
+        await _settle(pilot)
+        assert app.screen is screen
+        assert not isinstance(screen.focused, Input)
 
 
 @pytest.mark.asyncio
@@ -170,6 +219,74 @@ async def test_transform_submit_reuses_widget():
         await screen._render_current()
         await _settle(pilot)
         assert screen._active_widget is table_widget
+
+
+@pytest.mark.asyncio
+async def test_search_bar_visible_on_table_view():
+    """The search bar is visible when the table view is active."""
+    app = _make_app()
+    async with app.run_test() as pilot:
+        await _settle(pilot)
+        screen = app.screen
+        search_bar = screen.query_one("#search-bar")
+        assert search_bar.display is True
+
+
+@pytest.mark.asyncio
+async def test_search_bar_hidden_on_chart_view():
+    """The search bar is hidden when a non-table viz is active."""
+    app = _make_app()
+    async with app.run_test() as pilot:
+        await _settle(pilot)
+        screen = app.screen
+        await pilot.press("n")  # line chart
+        await _settle(pilot)
+        search_bar = screen.query_one("#search-bar")
+        assert search_bar.display is False
+
+
+@pytest.mark.asyncio
+async def test_search_routed_to_table_view():
+    """Typing in the search bar updates the TableView's search value."""
+    app = _make_app()
+    async with app.run_test() as pilot:
+        await _settle(pilot)
+        screen = app.screen
+        table = screen._active_widget
+        assert hasattr(table, "set_search")
+        # Focus and type in the search bar
+        await pilot.press("/")
+        await _settle(pilot)
+        await pilot.press("a")
+        await pilot.press("b")
+        await _settle(pilot)
+        assert table._search_value == "ab"
+
+
+@pytest.mark.asyncio
+async def test_search_value_survives_viz_cycle():
+    """Search text persists when cycling away from table and back."""
+    app = _make_app()
+    async with app.run_test() as pilot:
+        await _settle(pilot)
+        screen = app.screen
+        # Type a search
+        await pilot.press("/")
+        await _settle(pilot)
+        await pilot.press("b")
+        await _settle(pilot)
+        table = screen._active_widget
+        assert table._search_value == "b"
+        # Cycle to line chart and back
+        await pilot.press("escape")  # unfocus search
+        await _settle(pilot)
+        await pilot.press("n")  # line
+        await _settle(pilot)
+        await pilot.press("p")  # back to table
+        await _settle(pilot)
+        search_bar = screen.query_one("#search-bar")
+        assert search_bar.value == "b"
+        assert screen._active_widget._search_value == "b"
 
 
 @pytest.mark.asyncio

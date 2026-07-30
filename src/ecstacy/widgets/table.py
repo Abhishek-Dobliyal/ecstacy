@@ -3,7 +3,7 @@ from __future__ import annotations
 import pandas as pd
 from textual.app import ComposeResult
 from textual.containers import Vertical
-from textual.widgets import DataTable, Input, Label
+from textual.widgets import DataTable, Label
 
 from ecstacy.config import defaults
 from ecstacy.core import registry
@@ -15,7 +15,6 @@ from ecstacy.widgets.base import ColumnMapping
 class TableView(Vertical):
     viz_name = "table"
     BINDINGS = [
-        ("slash", "focus_search", "Search"),
         ("s", "sort_prompt", "Sort"),
         ("c", "column_picker", "Columns"),
         ("e", "export_view", "Export"),
@@ -24,16 +23,12 @@ class TableView(Vertical):
     TableView {
         height: 1fr;
     }
-    TableView #table-search {
-        height: 1;
-        margin: 0 0 0 0;
-        padding: 0 1;
-    }
     TableView #table-data {
         height: 1fr;
     }
     TableView #table-footer {
         height: 1;
+        margin: 0 0 1 0;
         color: $text-muted;
         padding: 0 1;
     }
@@ -54,7 +49,6 @@ class TableView(Vertical):
         self._columns_signature: tuple[str, ...] = ()
 
     def compose(self) -> ComposeResult:
-        yield Input(placeholder="/ to search  ·  type to filter rows", id="table-search")
         yield DataTable(id="table-data")
         yield Label("", id="table-footer")
 
@@ -68,13 +62,17 @@ class TableView(Vertical):
             self._pending_dataset = None
             self._populate()
 
-    def action_focus_search(self) -> None:
-        self.query_one("#table-search", Input).focus()
-
     def action_sort_prompt(self) -> None:
         table = self.query_one("#table-data", DataTable)
         table.focus()
         self.notify("use arrow keys to select a column, press enter to sort")
+
+    def set_search(self, value: str) -> None:
+        """Called by ChartScreen when the screen-level search input changes."""
+        self._search_value = value
+        if self._search_timer is not None:
+            self._search_timer.stop()
+        self._search_timer = self.set_timer(0.15, self._populate_after_debounce)
 
     def action_column_picker(self) -> None:
         from ecstacy.screens.modals import ColumnPickerScreen
@@ -152,14 +150,6 @@ class TableView(Vertical):
             self._populate()
         else:
             self._pending_dataset = dataset
-
-    def on_input_changed(self, event: Input.Changed) -> None:
-        if event.input.id != "table-search":
-            return
-        self._search_value = event.value
-        if self._search_timer is not None:
-            self._search_timer.stop()
-        self._search_timer = self.set_timer(0.15, self._populate_after_debounce)
 
     def _populate_after_debounce(self) -> None:
         # filter/sort/row-building run off the UI thread; the generation

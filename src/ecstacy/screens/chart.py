@@ -4,7 +4,7 @@ import asyncio
 from typing import TYPE_CHECKING
 
 from textual.app import ComposeResult
-from textual.containers import Container
+from textual.containers import Container, Horizontal
 from textual.screen import Screen
 from textual.widget import Widget
 from textual.widgets import DataTable, Footer, Header, Input
@@ -22,10 +22,22 @@ if TYPE_CHECKING:
 
 class ChartScreen(Screen):
     DEFAULT_CSS = """
-    ChartScreen #transform-bar {
+    ChartScreen #input-row {
         height: 1;
-        margin: 0 0 0 0;
+        margin: 1 0 0 0;
+        padding: 0;
+    }
+    ChartScreen #search-bar {
+        width: 1fr;
+        border: none;
         padding: 0 1;
+        background: $surface;
+    }
+    ChartScreen #transform-bar {
+        width: 1fr;
+        border: none;
+        padding: 0 1;
+        background: $surface;
     }
     ChartScreen #viz-holder {
         height: 1fr;
@@ -38,8 +50,9 @@ class ChartScreen(Screen):
         ("p", "prev_viz", "Prev viz"),
         ("r", "refresh", "Refresh"),
         ("ctrl+f", "focus_transform", "Query"),
+        ("slash", "focus_search", "Search"),
         ("t", "app.toggle_theme", "Theme"),
-        ("escape", "app.pop_screen", "Back"),
+        ("escape", "escape", "Back"),
     ]
 
     def __init__(
@@ -69,15 +82,39 @@ class ChartScreen(Screen):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
-        placeholder = (
-            "ctrl+f to query  ·  where value > 100 | group_by region | agg mean | limit 10"
-        )
-        yield Input(placeholder=placeholder, id="transform-bar")
+        with Horizontal(id="input-row"):
+            yield Input(
+                placeholder="/ to search  ·  type to filter rows", id="search-bar"
+            )
+            yield Input(
+                placeholder=(
+                    "ctrl+f to query  ·  where value > 100 | "
+                    "group_by region | agg mean | limit 10"
+                ),
+                id="transform-bar",
+            )
         yield Container(id="viz-holder")
         yield Footer()
 
     def action_focus_transform(self) -> None:
         self.query_one("#transform-bar", Input).focus()
+
+    def action_focus_search(self) -> None:
+        if self._active_widget is not None and hasattr(self._active_widget, "set_search"):
+            self.query_one("#search-bar", Input).focus()
+
+    def action_escape(self) -> None:
+        """Escape exits the search/query input first; only pops the screen
+        if no input is focused. This gives the standard "press escape once
+        to exit search, press again to go back" UX."""
+        focused = self.focused
+        if isinstance(focused, Input):
+            if self._active_widget is not None:
+                self._focus_content(self._active_widget)
+            else:
+                self.set_focus(None)
+            return
+        self.app.pop_screen()
 
     async def on_mount(self) -> None:
         await self._render_current()
@@ -198,6 +235,13 @@ class ChartScreen(Screen):
         self._transform_query = event.value.strip()
         await self._render_current()
 
+    def on_input_changed(self, event: Input.Changed) -> None:
+        if event.input.id != "search-bar":
+            return
+        widget = self._active_widget
+        if widget is not None and hasattr(widget, "set_search"):
+            widget.set_search(event.value)
+
     def _get_transformed_dataset(self) -> DataSet:
         key = (id(self.dataset), self._transform_query)
         if self._transform_cache_key == key and self._transform_cache is not None:
@@ -254,6 +298,13 @@ class ChartScreen(Screen):
             widget = self._viz_pool[name]
             widget.display = True
         self._active_widget = widget
+        # Show the search bar only for table view; sync its value from
+        # the pooled widget so a previous search survives viz cycles.
+        search_bar = self.query_one("#search-bar", Input)
+        is_table = hasattr(widget, "set_search")
+        search_bar.display = is_table
+        if is_table:
+            search_bar.value = widget._search_value
         dataset = self._get_transformed_dataset()
         widget.set_data(dataset, self.mapping)
         self._update_border(dataset)
