@@ -44,7 +44,7 @@ class Scheduler:
             timer = self._app.set_interval(job.interval, lambda: self.run_now(job))
             self._timers.append(timer)
 
-    def run_now(self, job: Job) -> None:
+    def run_now(self, job: Job, force: bool = False) -> None:
         """Fetch a job now, unless its previous fetch is still running or the
         owning screen isn't on top (e.g. a modal is open)."""
         if self._stopped or job.in_flight:
@@ -56,16 +56,22 @@ class Scheduler:
         # long refresh session.
         self._workers = [w for w in self._workers if not w.is_finished]
         worker = self._app.run_worker(
-            lambda: self._fetch(job),
+            lambda: self._fetch(job, force=force),
             thread=True,
             exclusive=False,
             exit_on_error=False,
         )
         self._workers.append(worker)
 
-    def _fetch(self, job: Job) -> None:
+    def _fetch(self, job: Job, force: bool = False) -> None:
         try:
-            dataset = job.source.fetch(keep_raw=job.keep_raw)
+            kwargs: dict[str, object] = {"keep_raw": job.keep_raw}
+            import inspect
+
+            sig = inspect.signature(job.source.fetch)
+            if "force" in sig.parameters:
+                kwargs["force"] = force
+            dataset = job.source.fetch(**kwargs)
         except Exception as error:  # surfaced to the UI, never crashes the loop
             self._deliver(job.on_error, error)
         else:

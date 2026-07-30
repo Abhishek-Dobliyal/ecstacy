@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.2] - 2026-07-30
+
+### Added
+- Dashboard WebSocket streaming: socket sources on a dashboard now stream
+  live into panels instead of polling. Stream and poll sources coexist on
+  the same dashboard. An initial seed fetch fills panels immediately so
+  they don't wait for the first stream batch (up to the socket timeout).
+  Stream updates are gated like poll ticks (skipped while a modal is on
+  top). Manual refresh (`r`) notifies "stream sources update automatically"
+  for stream-only dashboards.
+- REST TTL cache: `RestSource` accepts a `ttl` param (seconds, default 0
+  = disabled). When set, `fetch()` returns the cached `DataSet` within the
+  TTL window, avoiding redundant HTTP requests on dashboard refresh ticks.
+  Errors are not cached. Manual refresh (`r`) bypasses the cache via a
+  `force` kwarg plumbed through `Scheduler.run_now` → `fetch(force=True)`.
+
 ## [0.9.1] - 2026-07-29
 
 ### Added

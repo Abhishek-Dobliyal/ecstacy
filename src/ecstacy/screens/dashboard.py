@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import math
+from typing import TYPE_CHECKING
 
 import pandas as pd
 from textual.app import ComposeResult
@@ -17,6 +19,9 @@ from ecstacy.sources.base import Source, SourceError, SourceSpec, create_source
 from ecstacy.util.timeparse import parse_duration
 from ecstacy.widgets import create_viz
 from ecstacy.widgets.base import ColumnMapping
+
+if TYPE_CHECKING:
+    from textual.worker import Worker
 
 
 def _mapping_from_panel(panel: PanelConfig) -> ColumnMapping:
@@ -90,6 +95,8 @@ class DashboardScreen(Screen):
         self._multi_panel = True
         self._scheduler: Scheduler | None = None
         self._jobs: list[Job] = []
+        self._stream_workers: list[Worker] = []
+        self._stream_sources: set[str] = set()
         self._panel_widgets: dict[int, Widget] = {}
         self._panels_built = False
         self._render_pending = False
@@ -111,6 +118,10 @@ class DashboardScreen(Screen):
                 close()
 
     def _stop_scheduler(self) -> None:
+        for worker in self._stream_workers:
+            worker.cancel()
+        self._stream_workers = []
+        self._stream_sources = set()
         if self._scheduler is not None:
             self._scheduler.stop()
             self._scheduler = None
@@ -140,15 +151,59 @@ class DashboardScreen(Screen):
                 )
                 continue
             self._sources[spec.id] = source
+            keep_raw = spec.id in json_sources
+            if getattr(source, "supports_stream", False):
+                self._start_stream(source, spec.id, keep_raw)
+                continue
             job = Job(
                 source=source,
                 interval=interval,
                 on_data=self._on_data(spec.id),
                 on_error=self._on_error(spec.id),
-                keep_raw=spec.id in json_sources,
+                keep_raw=keep_raw,
             )
             self._jobs.append(job)
             self._scheduler.add(job)
+
+    def _start_stream(self, source: Source, source_id: str, keep_raw: bool) -> None:
+        # Seed with an initial one-shot fetch so panels show data immediately
+        # instead of waiting for the first stream batch (which can take up to
+        # the socket timeout, default 5s).
+        def _seed() -> None:
+            try:
+                dataset = source.fetch(keep_raw=keep_raw)
+            except Exception as error:
+                self._on_error(source_id)(error)
+                return
+            self._on_data(source_id)(dataset)
+
+        self.run_worker(_seed, thread=True, exclusive=False, exit_on_error=False)
+        # Start the async stream consumer for live updates.
+        worker = self.run_worker(
+            self._consume_stream(source, source_id, keep_raw=keep_raw),
+            exclusive=True,
+            exit_on_error=False,
+        )
+        self._stream_workers.append(worker)
+        self._stream_sources.add(source_id)
+
+    async def _consume_stream(
+        self, source: Source, source_id: str, keep_raw: bool = False
+    ) -> None:
+        stream = source.stream(keep_raw=keep_raw)
+        try:
+            async for dataset in stream:
+                # Gate like the polling scheduler: skip updates while a modal
+                # is on top so we don't re-render invisibly.
+                if self.app.screen is not self:
+                    continue
+                self._on_data(source_id)(dataset)
+        except asyncio.CancelledError:
+            raise
+        except Exception as error:
+            self._on_error(source_id)(error)
+        finally:
+            await stream.aclose()
 
     def _parse_refresh_interval(self) -> float:
         if not self.dashboard.refresh:
@@ -258,12 +313,16 @@ class DashboardScreen(Screen):
             widget.set_data(result, _mapping_from_panel(self.dashboard.panels[idx]))
 
     async def action_refresh(self) -> None:
-        if self._scheduler is None or not self._jobs:
+        has_poll = self._scheduler is not None and bool(self._jobs)
+        has_stream = bool(self._stream_sources)
+        if has_poll:
+            self.notify("refreshing...")
+            for job in self._jobs:
+                self._scheduler.run_now(job, force=True)
+        elif has_stream:
+            self.notify("stream sources update automatically", severity="information")
+        else:
             self.notify("nothing to refresh", severity="warning")
-            return
-        self.notify("refreshing...")
-        for job in self._jobs:
-            self._scheduler.run_now(job)
 
     def _with_max_rows(self, spec: SourceSpec) -> SourceSpec:
         # sql queries express their own row limits; socket has no max_rows

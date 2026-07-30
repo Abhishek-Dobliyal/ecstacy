@@ -145,3 +145,92 @@ def test_rest_source_close_releases_client(monkeypatch):
     assert source._client is None
     source.fetch()
     assert source._client is not None
+
+
+def test_rest_ttl_cache_hits_within_window(monkeypatch):
+    call_count = 0
+
+    def mock_request(self, method, url, *, headers=None, params=None):
+        nonlocal call_count
+        call_count += 1
+        return Response(200, request=_request(), json=[{"value": call_count}])
+
+    monkeypatch.setattr("httpx.Client.request", mock_request)
+    spec = SourceSpec(
+        kind="rest", id="api",
+        params={"url": "https://api.example.com/items", "ttl": 10.0},
+    )
+    source = create_source(spec)
+    first = source.fetch()
+    second = source.fetch()
+    assert call_count == 1  # cache hit
+    assert first.meta.rows == 1
+    assert second.meta.rows == 1
+
+
+def test_rest_ttl_cache_misses_after_expiry(monkeypatch):
+    call_count = 0
+
+    def mock_request(self, method, url, *, headers=None, params=None):
+        nonlocal call_count
+        call_count += 1
+        return Response(200, request=_request(), json=[{"value": call_count}])
+
+    monkeypatch.setattr("httpx.Client.request", mock_request)
+    spec = SourceSpec(
+        kind="rest", id="api",
+        params={"url": "https://api.example.com/items", "ttl": 0.05},
+    )
+    source = create_source(spec)
+    source.fetch()
+    assert call_count == 1
+    import time
+    time.sleep(0.06)
+    source.fetch()
+    assert call_count == 2  # cache expired
+
+
+def test_rest_ttl_cache_not_poisoned_by_errors(monkeypatch):
+    call_count = 0
+
+    def mock_request(self, method, url, *, headers=None, params=None):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise Exception("transient")
+        return Response(200, request=_request(), json=[{"value": 1}])
+
+    monkeypatch.setattr("httpx.Client.request", mock_request)
+    spec = SourceSpec(
+        kind="rest", id="api",
+        params={"url": "https://api.example.com/items", "ttl": 10.0},
+    )
+    source = create_source(spec)
+    try:
+        source.fetch()
+    except Exception:
+        pass
+    # The failed fetch should not poison the cache — next fetch should
+    # hit the network again.
+    source.fetch()
+    assert call_count == 2
+
+
+def test_rest_ttl_force_bypasses_cache(monkeypatch):
+    call_count = 0
+
+    def mock_request(self, method, url, *, headers=None, params=None):
+        nonlocal call_count
+        call_count += 1
+        return Response(200, request=_request(), json=[{"value": call_count}])
+
+    monkeypatch.setattr("httpx.Client.request", mock_request)
+    spec = SourceSpec(
+        kind="rest", id="api",
+        params={"url": "https://api.example.com/items", "ttl": 10.0},
+    )
+    source = create_source(spec)
+    source.fetch()
+    assert call_count == 1
+    source.fetch(force=True)
+    assert call_count == 2  # force bypassed the cache

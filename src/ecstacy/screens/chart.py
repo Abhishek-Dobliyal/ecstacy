@@ -188,7 +188,7 @@ class ChartScreen(Screen):
     async def action_refresh(self) -> None:
         if self._scheduler is not None and self._job is not None:
             self.notify("refreshing...")
-            self._scheduler.run_now(self._job)
+            self._scheduler.run_now(self._job, force=True)
         else:
             self.notify("no refresh configured (use --refresh)", severity="warning")
 

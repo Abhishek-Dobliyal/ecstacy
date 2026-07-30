@@ -4,6 +4,7 @@ import pytest
 
 from ecstacy.app import EcstacyApp
 from ecstacy.config.loader import load_app_config, load_dashboard
+from ecstacy.core.dataset import DataSet
 from ecstacy.screens.chart import ChartScreen
 from ecstacy.screens.dashboard import DashboardScreen
 
@@ -233,4 +234,144 @@ async def test_progressive_update_dropped_if_user_navigated_away(tmp_path):
         # No crash — the progressive update was silently dropped because
         # the screen is no longer the ChartScreen for this spec.
         assert not isinstance(app.screen, ChartScreen)
+
+
+# -----------------------------------------------------------------------
+# Dashboard streaming (item 7)
+# -----------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_dashboard_stream_updates_panels(monkeypatch):
+    import pandas as pd
+
+    from ecstacy.config.schema import (
+        DashboardConfig,
+        PanelConfig,
+    )
+    from ecstacy.config.schema import (
+        SourceSpec as SchemaSourceSpec,
+    )
+    from ecstacy.sources.base import Source
+
+    class FakeStreamSource(Source):
+        kind = "socket"
+        supports_stream = True
+
+        def __init__(self, id, **kwargs):
+            super().__init__(id=id)
+            self._call = 0
+
+        def fetch(self, keep_raw: bool = False, force: bool = False):
+            self._call += 1
+            return DataSet.from_dataframe(
+                pd.DataFrame({"v": [self._call]}), source_id="s", kind="socket"
+            )
+
+        async def stream(self, keep_raw: bool = False):
+            for value in (10, 20, 30):
+                yield DataSet.from_dataframe(
+                    pd.DataFrame({"v": [value]}), source_id="s", kind="socket"
+                )
+
+    monkeypatch.setattr(
+        "ecstacy.screens.dashboard.create_source", lambda spec: FakeStreamSource(id=spec.id)
+    )
+
+    dashboard = DashboardConfig(
+        refresh="5s",
+        sources=[SchemaSourceSpec(kind="socket", id="stream", params={})],
+        panels=[PanelConfig(source="stream", viz="table")],
+    )
+    app = EcstacyApp(load_app_config(), dashboard=dashboard, show_splash=False)
+    async with app.run_test() as pilot:
+        await app.workers.wait_for_complete()
+        for _ in range(12):
+            await pilot.pause()
+        screen = app.screen
+        assert isinstance(screen, DashboardScreen)
+        assert "stream" in screen._datasets
+        # The stream should have delivered the last batch (30).
+        assert screen._datasets["stream"].frame["v"].tolist() == [30]
+        assert "stream" in screen._stream_sources
+
+
+@pytest.mark.asyncio
+async def test_dashboard_stream_and_poll_coexist(monkeypatch):
+    import pandas as pd
+
+    from ecstacy.config.schema import (
+        DashboardConfig,
+        PanelConfig,
+    )
+    from ecstacy.config.schema import (
+        SourceSpec as SchemaSourceSpec,
+    )
+    from ecstacy.sources.base import Source
+
+    class FakeStreamSource(Source):
+        kind = "socket"
+        supports_stream = True
+
+        def __init__(self, id, **kwargs):
+            super().__init__(id=id)
+
+        def fetch(self, keep_raw: bool = False, force: bool = False):
+            return DataSet.from_dataframe(
+                pd.DataFrame({"v": [1]}), source_id="stream", kind="socket"
+            )
+
+        async def stream(self, keep_raw: bool = False):
+            for value in (2, 3):
+                yield DataSet.from_dataframe(
+                    pd.DataFrame({"v": [value]}), source_id="stream", kind="socket"
+                )
+
+    monkeypatch.setattr(
+        "ecstacy.screens.dashboard.create_source",
+        lambda spec: FakeStreamSource(id=spec.id) if spec.kind == "socket" else _RealSource(spec),
+    )
+
+    dashboard = DashboardConfig(
+        refresh="5s",
+        sources=[
+            SchemaSourceSpec(kind="socket", id="stream", params={}),
+            SchemaSourceSpec(
+                kind="file", id="sample", params={"path": "tests/data/sample.csv"}
+            ),
+        ],
+        panels=[
+            PanelConfig(source="stream", viz="table"),
+            PanelConfig(source="sample", viz="table"),
+        ],
+    )
+    app = EcstacyApp(load_app_config(), dashboard=dashboard, show_splash=False)
+    async with app.run_test() as pilot:
+        await app.workers.wait_for_complete()
+        for _ in range(12):
+            await pilot.pause()
+        screen = app.screen
+        assert isinstance(screen, DashboardScreen)
+        # Both sources should have data.
+        assert "stream" in screen._datasets
+        assert "sample" in screen._datasets
+        # Stream source went through the stream path.
+        assert "stream" in screen._stream_sources
+        # File source went through the poll path.
+        assert len(screen._jobs) >= 1
+
+
+class _RealSource:
+    """Fallback for non-socket sources in the coexist test."""
+
+    def __init__(self, spec):
+        from ecstacy.sources.base import create_source as real_create
+
+        self._real = real_create(spec)
+
+    def fetch(self, keep_raw=False, force=False):
+        return self._real.fetch(keep_raw=keep_raw)
+
+    @property
+    def id(self):
+        return self._real.id
 
