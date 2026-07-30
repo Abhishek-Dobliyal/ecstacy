@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.1] - 2026-07-30
+
+### Fixed
+- Chart column picker modal could not be confirmed: the `enter` screen
+  binding conflicted with `Select`'s own `enter` binding (opens the
+  dropdown). Replaced the `enter` binding with explicit OK/Cancel buttons
+  at the bottom of the modal. Tab to OK and press enter to confirm, or
+  press escape to cancel. The chart now re-renders with the selected
+  columns when OK is pressed.
+
 ## [0.10.0] - 2026-07-30
 
 ### Added

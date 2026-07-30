@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from textual.app import ComposeResult
-from textual.containers import Vertical
+from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
-from textual.widgets import Input, Label, ListItem, ListView, Select
+from textual.widgets import Button, Input, Label, ListItem, ListView, Select
 
 from ecstacy.widgets.base import ColumnMapping
 
@@ -185,9 +185,17 @@ class ChartMappingScreen(ModalScreen):
     #mapping-box Label {
         margin: 0 0 0 0;
     }
+    #mapping-buttons {
+        height: 1;
+        align-horizontal: right;
+        margin: 1 0 0 0;
+    }
+    #mapping-buttons Button {
+        margin: 0 0 0 1;
+    }
     """
 
-    BINDINGS = [("escape", "cancel", "Cancel"), ("enter", "confirm", "OK")]
+    BINDINGS = [("escape", "cancel", "Cancel")]
 
     def __init__(
         self,
@@ -210,13 +218,22 @@ class ChartMappingScreen(ModalScreen):
                 if isinstance(current, list):
                     current = current[0] if current else None
                 options = [("(auto)", None)] + [(c, c) for c in self.columns]
-                # Select requires at least one option; default to first
                 select = Select(
                     options=options,
                     value=current if current in self.columns else None,
                     id=f"map-{field}",
                 )
                 yield select
+            yield Label("tab to OK, press enter to confirm · esc to cancel")
+            with Horizontal(id="mapping-buttons"):
+                yield Button("OK", id="mapping-ok")
+                yield Button("Cancel", id="mapping-cancel")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "mapping-ok":
+            self.action_confirm()
+        elif event.button.id == "mapping-cancel":
+            self.action_cancel()
 
     def action_confirm(self) -> None:
         result = ColumnMapping(

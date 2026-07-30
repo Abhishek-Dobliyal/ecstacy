@@ -487,3 +487,33 @@ def test_viz_no_mapping_set():
     assert "json" in VIZ_NO_MAPPING
     assert "line" not in VIZ_NO_MAPPING
     assert "bar" not in VIZ_NO_MAPPING
+
+
+@pytest.mark.asyncio
+async def test_column_picker_ok_button_confirms():
+    """Pressing the OK button dismisses the modal with a mapping."""
+    from textual.app import App
+    from textual.widgets import Button
+
+    from ecstacy.screens.modals import ChartMappingScreen
+    from ecstacy.widgets.base import ColumnMapping
+
+    mapping = ColumnMapping(value="a")
+    columns = ["a", "b", "c"]
+
+    class _App(App):
+        def on_mount(self):
+            self.push_screen(ChartMappingScreen("histogram", columns, mapping))
+
+    app = _App()
+    async with app.run_test() as pilot:
+        for _ in range(5):
+            await pilot.pause()
+        # Press the OK button
+        ok_button = app.screen.query_one("#mapping-ok", Button)
+        await pilot.click(ok_button)
+        for _ in range(5):
+            await pilot.pause()
+        # The modal should have been dismissed
+        from ecstacy.screens.modals import ChartMappingScreen as _CMS
+        assert not isinstance(app.screen, _CMS)
