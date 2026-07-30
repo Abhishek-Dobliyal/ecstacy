@@ -72,6 +72,63 @@ async def test_chart_widget_does_not_hold_input_focus():
 
 
 @pytest.mark.asyncio
+async def test_search_inputs_not_focusable_on_mount():
+    """Inputs have can_focus=False so auto-focus never lands on them."""
+    from textual.widgets import Input
+
+    app = _make_app()
+    async with app.run_test() as pilot:
+        await _settle(pilot)
+        screen = app.screen
+        assert not screen.query_one("#search-bar", Input).can_focus
+        assert not screen.query_one("#transform-bar", Input).can_focus
+        # Opening with a non-table viz: focus is None, not an Input.
+        await pilot.press("n")  # line chart
+        await _settle(pilot)
+        assert not isinstance(screen.focused, Input)
+
+
+@pytest.mark.asyncio
+async def test_arrow_keys_switch_viz_on_non_table():
+    """Arrow keys advance viz on a non-table chart (focus not trapped)."""
+    app = _make_app()
+    async with app.run_test() as pilot:
+        await _settle(pilot)
+        screen = app.screen
+        await pilot.press("n")  # line chart (non-table)
+        await _settle(pilot)
+        idx_after_n = screen.index
+        await pilot.press("right")  # arrow right -> next_viz
+        await _settle(pilot)
+        assert screen.index == (idx_after_n + 1) % len(screen.names)
+        await pilot.press("left")  # arrow left -> prev_viz
+        await _settle(pilot)
+        assert screen.index == idx_after_n
+
+
+@pytest.mark.asyncio
+async def test_focus_search_makes_input_focusable_again():
+    """Pressing / flips can_focus=True and focuses the search-bar."""
+    from textual.widgets import Input
+
+    app = _make_app()
+    async with app.run_test() as pilot:
+        await _settle(pilot)
+        screen = app.screen
+        bar = screen.query_one("#search-bar", Input)
+        assert not bar.can_focus
+        await pilot.press("/")
+        await _settle(pilot)
+        assert bar.can_focus
+        assert screen.focused is bar
+        # Escape resets can_focus and unfocuses.
+        await pilot.press("escape")
+        await _settle(pilot)
+        assert not bar.can_focus
+        assert screen.focused is not bar
+
+
+@pytest.mark.asyncio
 async def test_focus_returns_to_table_after_cycling_back():
     from textual.widgets import DataTable
 
@@ -328,7 +385,7 @@ async def test_streaming_source_updates_dataset(monkeypatch):
         def fetch(self, keep_raw: bool = False):
             raise NotImplementedError
 
-        async def stream(self, keep_raw: bool = False):
+        async def stream(self, keep_raw: bool = False, on_status=None):
             for value in (1, 2):
                 yield DataSet.from_dataframe(
                     pd.DataFrame({"v": [value]}), source_id="s", kind="socket"

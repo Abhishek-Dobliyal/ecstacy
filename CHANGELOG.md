@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.6] - 2026-07-30
+
+### Added
+- WebSocket sources now reconnect automatically with exponential backoff when
+  the connection drops. `SocketSource` gains `reconnect` (default `True`),
+  `reconnect_attempts` (default `None` = infinite), `reconnect_base`
+  (default `1.0s`), and `reconnect_max` (default `30.0s`). Backoff doubles on
+  each failed attempt up to the cap, then resets on a successful reconnect.
+  A failed stream no longer leaves the dashboard/chart showing stale data
+  forever; a `reconnecting…` status is surfaced via a new optional
+  `on_status` callback on `Source.stream()`, wired into both dashboard and
+  chart screens as a warning toast. Cancellation propagates immediately (no
+  retry on unmount).
+
+### Fixed
+- Table view no longer freezes the TUI on large datasets. The initial
+  populate, column-sort repopulate, and column-picker changes now run
+  filter+sort on a worker thread (unified with the existing debounced-search
+  path via a shared `_dispatch_populate`/`_deliver_populate` flow with a
+  generation counter). Only the cheap column-layout setup stays on the UI
+  thread. Opening a 1M-row table or clicking a column to sort stays
+  responsive.
+- Chart screen no longer requires pressing `escape` before `n`/`p`/arrow
+  keys work. The search and query `Input` widgets are now non-focusable
+  (`can_focus = False`) on mount, so Textual's auto-focus lands on the
+  DataTable (table view) or nothing (non-table) instead of the search bar.
+  `action_focus_search`/`action_focus_transform` re-enable focus on demand
+  for `/` and `ctrl+f`; `action_escape` resets it. Arrow keys navigate the
+  table when one is shown and switch visualizations otherwise.
+- Multi-column sort in the table view now works. The async rebuild
+  previously reset the DataTable's column cursor to 0, so sorting column A
+  then moving to column B and pressing enter sorted column 0 instead.
+  `_deliver_populate` now saves and restores the cursor position (clamped
+  to the new dimensions) across the rebuild.
+
 ## [0.10.5] - 2026-07-30
 
 ### Added

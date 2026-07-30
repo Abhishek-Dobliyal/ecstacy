@@ -188,7 +188,11 @@ class DashboardScreen(Screen):
     async def _consume_stream(
         self, source: Source, source_id: str, keep_raw: bool = False
     ) -> None:
-        stream = source.stream(keep_raw=keep_raw)
+        def _on_status(msg: str) -> None:
+            if self.is_attached:
+                self.app.call_from_thread(self.notify, msg, severity="warning")
+
+        stream = source.stream(keep_raw=keep_raw, on_status=_on_status)
         try:
             async for dataset in stream:
                 # Skip updates when a modal is on top.

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -38,7 +38,11 @@ class Source(ABC):
     def describe(self) -> str:
         return f"{self.kind}:{self.id}"
 
-    async def stream(self, keep_raw: bool = False) -> AsyncIterator[DataSet]:
+    async def stream(
+        self,
+        keep_raw: bool = False,
+        on_status: Callable[[str], None] | None = None,
+    ) -> AsyncIterator[DataSet]:
         raise NotImplementedError(f"{self.kind} source does not support streaming")
         yield  # pragma: no cover
 

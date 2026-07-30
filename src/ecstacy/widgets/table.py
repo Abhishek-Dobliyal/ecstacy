@@ -181,10 +181,14 @@ class TableView(Vertical):
             self._pending_dataset = dataset
 
     def _populate_after_debounce(self) -> None:
-        # Offload filter/sort to a thread; discard stale results via gen counter.
-        self._search_gen += 1
+        # The debounce timer fired; re-populate with the current search value.
+        self._populate(self._search_value)
+
+    def _dispatch_populate(self, search: str) -> None:
+        # Offload filter/sort to a worker thread; discard stale results via the
+        # generation counter captured below. Shared by the initial populate,
+        # sort, column-picker, and debounced-search paths.
         gen = self._search_gen
-        search = self._search_value
         frame = self._frame
         sort_cols = list(self._sort_cols)
         hidden = set(self._hidden_columns)
@@ -206,22 +210,25 @@ class TableView(Vertical):
                 work = frame[mask]
             filtered_count = len(work)
             work = sort_frame_multi(work, sort_cols)
+            all_columns = [str(c) for c in frame.columns]
+            visible_columns = [c for c in all_columns if c not in hidden]
             try:
                 self.app.call_from_thread(
-                    self._deliver_search,
+                    self._deliver_populate,
                     gen,
                     search,
                     work,
                     filtered_count,
                     len(frame),
                     sort_cols,
+                    visible_columns,
                 )
             except RuntimeError:
                 pass  # app shutting down
 
         self.run_worker(_work, thread=True, exclusive=False, exit_on_error=False)
 
-    def _deliver_search(
+    def _deliver_populate(
         self,
         gen: int,
         search: str,
@@ -229,14 +236,30 @@ class TableView(Vertical):
         filtered_count: int,
         total_before: int,
         sort_cols: list[tuple[str, bool]],
+        visible_columns: list[str],
     ) -> None:
         if gen != self._search_gen or not self.is_mounted:
             return
         table = self.query_one("#table-data", DataTable)
-        table.clear()  # rows only; column layout is unchanged
+        # Preserve the user's cursor across the rebuild so sorting/filtering
+        # doesn't snap it back to column 0 (which would break multi-column sort).
+        saved_col = table.cursor_column
+        saved_row = table.cursor_row
+        if tuple(visible_columns) != self._rendered_columns:
+            table.clear(columns=True)
+            table.add_columns(*visible_columns)
+            self._rendered_columns = tuple(visible_columns)
+        else:
+            table.clear()  # rows only; column layout is unchanged
         self._full_view = full_view
         self._loaded_count = 0
         self._render_table_rows()
+        col_count = len(table.ordered_columns)
+        if col_count and table.row_count:
+            table.move_cursor(
+                row=min(saved_row, table.row_count - 1),
+                column=min(saved_col, col_count - 1),
+            )
         footer = self.query_one("#table-footer", Label)
         footer.update(
             _footer_text(search, filtered_count, total_before, self._loaded_count, sort_cols)
@@ -282,34 +305,19 @@ class TableView(Vertical):
         return frame[mask]
 
     def _populate(self, search: str = "") -> None:
-        self._search_gen += 1  # invalidate any in-flight search worker
-        table = self.query_one("#table-data", DataTable)
+        # Bump generation to invalidate any in-flight populate worker, then
+        # dispatch the filter/sort work to a thread. Only the cheap empty-frame
+        # short-circuit runs synchronously on the UI thread.
+        self._search_gen += 1
         frame = self._frame
         if frame.empty:
+            table = self.query_one("#table-data", DataTable)
             table.clear(columns=True)
             self._rendered_columns = ()
             self._full_view = None
             self._loaded_count = 0
             return
-        all_columns = [str(c) for c in frame.columns]
-        visible_columns = [c for c in all_columns if c not in self._hidden_columns]
-        if tuple(visible_columns) != self._rendered_columns:
-            table.clear(columns=True)
-            table.add_columns(*visible_columns)
-            self._rendered_columns = tuple(visible_columns)
-        else:
-            table.clear()  # rows only; column layout is unchanged
-        total_before = len(frame)
-        work = self._filter_cached(frame, search)
-        filtered_count = len(work)
-        work = sort_frame_multi(work, self._sort_cols)
-        self._full_view = work
-        self._loaded_count = 0
-        self._render_table_rows()
-        footer = self.query_one("#table-footer", Label)
-        footer.update(
-            _footer_text(search, filtered_count, total_before, self._loaded_count, self._sort_cols)
-        )
+        self._dispatch_populate(search)
 
     def _render_table_rows(self) -> None:
         """Append the next page of rows from _full_view to the DataTable."""

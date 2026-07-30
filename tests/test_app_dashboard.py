@@ -267,7 +267,7 @@ async def test_dashboard_stream_updates_panels(monkeypatch):
                 pd.DataFrame({"v": [self._call]}), source_id="s", kind="socket"
             )
 
-        async def stream(self, keep_raw: bool = False):
+        async def stream(self, keep_raw: bool = False, on_status=None):
             for value in (10, 20, 30):
                 yield DataSet.from_dataframe(
                     pd.DataFrame({"v": [value]}), source_id="s", kind="socket"
@@ -320,7 +320,7 @@ async def test_dashboard_stream_and_poll_coexist(monkeypatch):
                 pd.DataFrame({"v": [1]}), source_id="stream", kind="socket"
             )
 
-        async def stream(self, keep_raw: bool = False):
+        async def stream(self, keep_raw: bool = False, on_status=None):
             for value in (2, 3):
                 yield DataSet.from_dataframe(
                     pd.DataFrame({"v": [value]}), source_id="stream", kind="socket"

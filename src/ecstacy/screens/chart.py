@@ -104,27 +104,35 @@ class ChartScreen(Screen):
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
         with Horizontal(id="input-row"):
-            yield Input(
+            search_bar = Input(
                 placeholder="/ to search  ·  type to filter rows", id="search-bar"
             )
-            yield Input(
+            search_bar.can_focus = False
+            yield search_bar
+            transform_bar = Input(
                 placeholder=(
                     "ctrl+f to query  ·  where value > 100 | "
                     "group_by region | agg mean | limit 10"
                 ),
                 id="transform-bar",
             )
+            transform_bar.can_focus = False
+            yield transform_bar
         yield Container(id="viz-holder")
         yield Label("", id="chart-note")
         yield Footer()
 
     def action_focus_transform(self) -> None:
         if self._active_widget is not None and hasattr(self._active_widget, "set_search"):
-            self.query_one("#transform-bar", Input).focus()
+            bar = self.query_one("#transform-bar", Input)
+            bar.can_focus = True
+            bar.focus()
 
     def action_focus_search(self) -> None:
         if self._active_widget is not None and hasattr(self._active_widget, "set_search"):
-            self.query_one("#search-bar", Input).focus()
+            bar = self.query_one("#search-bar", Input)
+            bar.can_focus = True
+            bar.focus()
 
     def action_column_picker(self) -> None:
         from ecstacy.screens.modals import VIZ_NO_MAPPING, ChartMappingScreen
@@ -155,6 +163,7 @@ class ChartScreen(Screen):
         """Exit search/query input first; pop screen when no input is focused."""
         focused = self.focused
         if isinstance(focused, Input):
+            focused.can_focus = False
             if self._active_widget is not None:
                 self._focus_content(self._active_widget)
             else:
@@ -214,7 +223,11 @@ class ChartScreen(Screen):
         )
 
     async def _consume_stream(self, source: Source, keep_raw: bool = False) -> None:
-        stream = source.stream(keep_raw=keep_raw)
+        def _on_status(msg: str) -> None:
+            if self.is_attached:
+                self.app.call_from_thread(self.notify, msg, severity="warning")
+
+        stream = source.stream(keep_raw=keep_raw, on_status=_on_status)
         try:
             async for dataset in stream:
                 self._on_refresh_data(dataset)
