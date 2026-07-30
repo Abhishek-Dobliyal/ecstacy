@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.7] - 2026-07-30
+
+### Fixed
+- `PlotWidget` now tracks its render worker and skips the paint delivery
+  (`call_from_thread` → `_paint_from_cache`) when the worker has been
+  cancelled — e.g. because the widget was unmounted mid-`_prepare` or
+  superseded by a newer `redraw()`. The generation counter already
+  discarded stale *results*; this additionally avoids the wasted plotext
+  `clear_figure` + re-paint + `refresh` cycle on hidden/unmounted widgets.
+  The worker reference is cleared after a successful delivery. The
+  `_prepare` CPU work itself cannot be interrupted (a Python threading
+  limitation), only the delivery path is skipped.
+- `DashboardScreen._on_error` now guards on `is_attached` (matching
+  `_on_data`), so a fetch failure that lands after the user has navigated
+  away no longer calls `notify()` on a popped screen.
+- `ChartScreen._consume_stream` now clears `self._stream_worker` in its
+  `finally` block, so the reference is released whether the stream
+  completes normally, errors out, or is cancelled — no stale pointer to a
+  finished worker.
+
 ## [0.10.6] - 2026-07-30
 
 ### Added

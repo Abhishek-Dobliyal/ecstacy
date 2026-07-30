@@ -73,6 +73,7 @@ class PlotWidget(PlotextPlot):
         self._auto_mapping_key: tuple | None = None
         self._on_note: Callable[[str | None], None] | None = None
         self._last_note: str | None = None
+        self._worker: object | None = None
 
     # public API
 
@@ -143,16 +144,22 @@ class PlotWidget(PlotextPlot):
 
         def _work() -> None:
             payload = self._prepare(frame, mapping, budget)
+            worker = self._worker
+            if worker is not None and getattr(worker, "is_cancelled", False):
+                return
             try:
                 self.app.call_from_thread(self._deliver, gen, payload)
             except RuntimeError:
                 pass
 
-        self.run_worker(_work, thread=True, exclusive=True, exit_on_error=False)
+        self._worker = self.run_worker(
+            _work, thread=True, exclusive=True, exit_on_error=False
+        )
 
     def _deliver(self, gen: int, payload: object) -> None:
         if gen != self._render_gen or not self.is_mounted:
             return
+        self._worker = None
         self._render_data = payload
         note = getattr(payload, "note", None)
         if note != self._last_note:

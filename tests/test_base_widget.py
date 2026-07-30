@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+import time
 
 import pandas as pd
 import pytest
@@ -21,6 +22,19 @@ class CountingPlot(PlotWidget):
         with _lock:
             _prepare_calls += 1
         return "payload"
+
+    def _paint(self, plt, payload, theme):
+        global _paint_calls
+        with _lock:
+            _paint_calls += 1
+
+
+class SlowPlot(PlotWidget):
+    viz_name = "slow"
+
+    def _prepare(self, frame, mapping, budget):
+        time.sleep(0.3)
+        return "slow-payload"
 
     def _paint(self, plt, payload, theme):
         global _paint_calls
@@ -120,3 +134,53 @@ async def test_explicit_mapping_change_redraws():
         widget.set_data(ds, ColumnMapping(x="y", y=["x"]))
         await _settle(app, pilot)
         assert _prepare_calls == 2
+
+
+@pytest.mark.asyncio
+async def test_plotwidget_clears_worker_ref_after_delivery():
+    global _prepare_calls
+    _prepare_calls = 0
+    from textual.app import App
+
+    class _App(App):
+        def compose(self):
+            yield CountingPlot()
+
+    app = _App()
+    async with app.run_test() as pilot:
+        widget = app.query_one(CountingPlot)
+        widget.set_data(_dataset())
+        await _settle(app, pilot)
+        assert widget._worker is None
+
+
+@pytest.mark.asyncio
+async def test_plotwidget_skips_delivery_when_cancelled():
+    """A widget unmounted mid-prepare skips the paint delivery."""
+    global _paint_calls
+    _paint_calls = 0
+    import asyncio
+
+    from textual.app import App
+
+    class _App(App):
+        def compose(self):
+            yield SlowPlot()
+
+    app = _App()
+    async with app.run_test() as pilot:
+        widget = app.query_one(SlowPlot)
+        widget.set_data(_dataset())
+        # Let the worker start (thread begins sleeping 0.3s).
+        await pilot.pause()
+        # Unmount the widget — this triggers cancel_node on its workers.
+        widget.remove()
+        # Process the unmount message so cancel_node runs and sets _cancelled.
+        for _ in range(4):
+            await pilot.pause()
+        # Wait for the thread to finish its 0.3s sleep; it should see
+        # is_cancelled=True and skip the call_from_thread delivery.
+        await asyncio.sleep(0.5)
+        for _ in range(8):
+            await pilot.pause()
+        assert _paint_calls == 0

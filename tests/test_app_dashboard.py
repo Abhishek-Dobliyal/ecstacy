@@ -554,3 +554,31 @@ def test_build_transformed_select_only_subsets_schema():
     assert result.schema.roles["region"] == ds.schema.roles["region"]
     assert result.schema.roles["value"] == ds.schema.roles["value"]
 
+
+@pytest.mark.asyncio
+async def test_dashboard_on_error_skipped_when_detached():
+    """_on_error returns early when the screen is no longer attached,
+    preventing notify on a popped screen."""
+    from ecstacy.config.schema import DashboardConfig, PanelConfig, SourceSpec
+    from ecstacy.sources.base import SourceError
+
+    dashboard = DashboardConfig(
+        sources=[SourceSpec(kind="file", id="s", params={"path": "tests/data/sample.csv"})],
+        panels=[PanelConfig(source="s", viz="table")],
+    )
+    app = EcstacyApp(load_app_config(), dashboard=dashboard, show_splash=False)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen = app.screen
+        assert isinstance(screen, DashboardScreen)
+        # Pop the screen so it's detached.
+        app.pop_screen()
+        for _ in range(4):
+            await pilot.pause()
+        notifications_before = len(app._notifications) if hasattr(app, "_notifications") else 0
+        # Calling _on_error on a detached screen should be a no-op.
+        screen._on_error("s")(SourceError("boom", source_id="s"))
+        # No new notification was emitted.
+        notifications_after = len(app._notifications) if hasattr(app, "_notifications") else 0
+        assert notifications_after == notifications_before
+

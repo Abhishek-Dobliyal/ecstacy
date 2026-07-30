@@ -574,3 +574,82 @@ async def test_column_picker_ok_button_confirms():
         # The modal should have been dismissed
         from ecstacy.screens.modals import ChartMappingScreen as _CMS
         assert not isinstance(app.screen, _CMS)
+
+
+@pytest.mark.asyncio
+async def test_stream_worker_ref_cleared_after_stream_ends(monkeypatch):
+    """When a stream source finishes (no more data), the _stream_worker
+    reference is cleared in the finally block."""
+    from textual.app import App
+
+    from ecstacy.screens.chart import ChartScreen
+    from ecstacy.sources.base import Source, SourceSpec
+
+    class FakeStreamSource(Source):
+        kind = "socket"
+        supports_stream = True
+
+        def fetch(self, keep_raw: bool = False):
+            raise NotImplementedError
+
+        async def stream(self, keep_raw: bool = False, on_status=None):
+            yield DataSet.from_dataframe(
+                pd.DataFrame({"v": [1]}), source_id="s", kind="socket"
+            )
+            # Stream ends after one yield.
+
+    monkeypatch.setattr(
+        "ecstacy.screens.chart.create_source", lambda spec: FakeStreamSource(id="s")
+    )
+    spec = SourceSpec(kind="socket", id="s", params={"url": "ws://example"})
+    ds = DataSet.from_dataframe(pd.DataFrame({"v": [0]}), source_id="s", kind="socket")
+
+    class _App(App):
+        def on_mount(self):
+            self.push_screen(ChartScreen(ds, "table", spec=spec, refresh=5.0))
+
+    app = _App()
+    async with app.run_test() as pilot:
+        await _settle(pilot, rounds=10)
+        screen = app.screen
+        # The stream completed; the worker ref should be cleared.
+        assert screen._stream_worker is None
+
+
+@pytest.mark.asyncio
+async def test_stream_worker_ref_cleared_on_error(monkeypatch):
+    """When a stream source raises an error, the _stream_worker reference
+    is cleared in the finally block."""
+    from textual.app import App
+
+    from ecstacy.screens.chart import ChartScreen
+    from ecstacy.sources.base import Source, SourceError, SourceSpec
+
+    class FakeStreamSource(Source):
+        kind = "socket"
+        supports_stream = True
+
+        def fetch(self, keep_raw: bool = False):
+            raise NotImplementedError
+
+        async def stream(self, keep_raw: bool = False, on_status=None):
+            yield DataSet.from_dataframe(
+                pd.DataFrame({"v": [1]}), source_id="s", kind="socket"
+            )
+            raise SourceError("stream died", source_id="s")
+
+    monkeypatch.setattr(
+        "ecstacy.screens.chart.create_source", lambda spec: FakeStreamSource(id="s")
+    )
+    spec = SourceSpec(kind="socket", id="s", params={"url": "ws://example"})
+    ds = DataSet.from_dataframe(pd.DataFrame({"v": [0]}), source_id="s", kind="socket")
+
+    class _App(App):
+        def on_mount(self):
+            self.push_screen(ChartScreen(ds, "table", spec=spec, refresh=5.0))
+
+    app = _App()
+    async with app.run_test() as pilot:
+        await _settle(pilot, rounds=12)
+        screen = app.screen
+        assert screen._stream_worker is None

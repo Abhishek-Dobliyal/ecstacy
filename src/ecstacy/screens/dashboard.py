@@ -229,6 +229,8 @@ class DashboardScreen(Screen):
 
     def _on_error(self, source_id: str):
         def _handle(error: Exception) -> None:
+            if not self.is_attached:
+                return
             msg = (
                 f"failed to load {source_id}: {error.message}"
                 if isinstance(error, SourceError)

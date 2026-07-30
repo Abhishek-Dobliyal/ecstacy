@@ -237,6 +237,7 @@ class ChartScreen(Screen):
             self._on_refresh_error(error)
         finally:
             await stream.aclose()  # type: ignore[attr-defined]
+            self._stream_worker = None
 
     def _on_refresh_data(self, dataset: DataSet) -> None:
         if not self.is_attached:
