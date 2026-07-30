@@ -250,10 +250,7 @@ class LineChart(PlotWidget):
         if not ycols:
             return _LinePayload(title="line chart needs a numeric column")
         xcol = mapping.x if mapping.x and mapping.x in frame.columns else None
-        # Truncate before dropna to operate on ≤budget rows.
         work = frame
-        if len(work) > budget:
-            work = work.tail(budget)
         series_list: list[_LineSeries] = []
         for col in ycols:
             yvals_raw = numeric(work[col]).dropna()
@@ -410,10 +407,8 @@ class Scatter(PlotWidget):
                 x, y = nums[0], nums[1]
         if not x or not y:
             return _ScatterPayload(title="scatter needs two numeric columns")
-        # Drop NaN on the x/y pair, then truncate before LTTB.
+        # Drop NaN on the x/y pair; downsampling happens below if needed.
         work = frame[[x, y]].dropna()
-        if len(work) > budget:
-            work = work.tail(budget)
         if work.empty:
             return _ScatterPayload(title="scatter has no overlapping x/y data")
         xvals = numeric(_to_numeric_or_timestamp(work[x])).to_numpy(dtype=float)

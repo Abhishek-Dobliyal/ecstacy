@@ -122,7 +122,7 @@ class EcstacyApp(App):
 
         user_max_rows = getattr(source, "max_rows", None)
         progressive = (
-            source.supports_progressive
+            getattr(source, "supports_progressive", False)
             and (user_max_rows is None or user_max_rows > _PROGRESSIVE_BATCH)
         )
 

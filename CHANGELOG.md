@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.4] - 2026-07-30
+
+### Fixed
+- LTTB downsampling was dead code for line and scatter charts: the input
+  frame was truncated with `tail(budget)` before the `len(...) > budget`
+  check, so the Largest-Triangle-Three-Buckets path never ran. Removed the
+  premature truncation so large datasets are downsampled to a representative
+  set of points instead of showing only the last N rows.
+- `app.py` accessed `source.supports_progressive` directly, which would crash
+  if a source did not define the attribute. Added a defensive
+  `getattr(source, "supports_progressive", False)` guard.
+
 ## [0.10.3] - 2026-07-30
 
 ### Fixed
