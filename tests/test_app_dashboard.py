@@ -375,3 +375,182 @@ class _RealSource:
     def id(self):
         return self._real.id
 
+
+# -----------------------------------------------------------------------
+# Dashboard per-panel transform cache (item 32)
+# -----------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_panel_cache_hits_on_same_dataset():
+    """Two ticks with the same dataset object → transform runs once."""
+    import pandas as pd
+
+    from ecstacy.config.schema import (
+        DashboardConfig,
+        PanelConfig,
+    )
+    from ecstacy.config.schema import (
+        SourceSpec as SchemaSourceSpec,
+    )
+    from ecstacy.core.dataset import DataSet
+    from ecstacy.sources.base import Source
+
+    call_count = 0
+
+    class _CountingSource(Source):
+        kind = "file"
+
+        def __init__(self, id, **kwargs):
+            super().__init__(id=id)
+
+        def fetch(self, keep_raw=False, force=False):
+            nonlocal call_count
+            call_count += 1
+            return DataSet.from_dataframe(
+                pd.DataFrame({"region": ["us", "eu"], "value": [10, 20]}),
+                source_id="s", kind="file",
+            )
+
+    from unittest import mock
+
+    mock_source = _CountingSource(id="s")
+
+    dashboard = DashboardConfig(
+        refresh="0s",
+        sources=[SchemaSourceSpec(kind="file", id="s", params={})],
+        panels=[
+            PanelConfig(source="s", viz="table", group_by=["region"], agg="sum"),
+        ],
+    )
+    app = EcstacyApp(load_app_config(), dashboard=dashboard, show_splash=False)
+    # Patch create_source so the dashboard uses our counting source
+    with mock.patch("ecstacy.screens.dashboard.create_source", return_value=mock_source):
+        async with app.run_test() as pilot:
+            await app.workers.wait_for_complete()
+            for _ in range(10):
+                await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, DashboardScreen)
+            assert "s" in screen._datasets
+            # Initial build populates cache
+            assert 0 in screen._panel_cache
+            cached_id, cached_ds = screen._panel_cache[0]
+            assert cached_id == id(screen._datasets["s"])
+            # Manually trigger _update_panels_for with the same dataset
+            screen._update_panels_for("s")
+            await app.workers.wait_for_complete()
+            for _ in range(6):
+                await pilot.pause()
+            # Cache should still hit (same dataset object)
+            assert screen._panel_cache[0][0] == id(screen._datasets["s"])
+            assert screen._panel_cache[0][1] is cached_ds
+
+
+@pytest.mark.asyncio
+async def test_panel_cache_misses_on_new_dataset():
+    """Second tick delivers a new dataset → cache misses, transform re-runs."""
+    import pandas as pd
+
+    from ecstacy.config.schema import (
+        DashboardConfig,
+        PanelConfig,
+    )
+    from ecstacy.config.schema import (
+        SourceSpec as SchemaSourceSpec,
+    )
+    from ecstacy.core.dataset import DataSet
+    from ecstacy.sources.base import Source
+
+    class _ChangingSource(Source):
+        kind = "file"
+
+        def __init__(self, id, **kwargs):
+            super().__init__(id=id)
+            self._n = 0
+
+        def fetch(self, keep_raw=False, force=False):
+            self._n += 1
+            return DataSet.from_dataframe(
+                pd.DataFrame({"region": ["us", "eu"], "value": [self._n * 10, 20]}),
+                source_id="s", kind="file",
+            )
+
+    mock_source = _ChangingSource(id="s")
+
+    dashboard = DashboardConfig(
+        refresh="0s",
+        sources=[SchemaSourceSpec(kind="file", id="s", params={})],
+        panels=[
+            PanelConfig(source="s", viz="table", group_by=["region"], agg="sum"),
+        ],
+    )
+    app = EcstacyApp(load_app_config(), dashboard=dashboard, show_splash=False)
+    from unittest import mock
+
+    with mock.patch("ecstacy.screens.dashboard.create_source", return_value=mock_source):
+        async with app.run_test() as pilot:
+            await app.workers.wait_for_complete()
+            for _ in range(10):
+                await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, DashboardScreen)
+            first_cached = screen._panel_cache.get(0)
+            assert first_cached is not None
+            # Deliver a new dataset (simulating a refresh tick)
+            new_ds = mock_source.fetch()
+            screen._datasets["s"] = new_ds
+            screen._update_panels_for("s")
+            await app.workers.wait_for_complete()
+            for _ in range(6):
+                await pilot.pause()
+            # Cache should have been updated with the new dataset id
+            assert screen._panel_cache[0][0] == id(new_ds)
+            assert screen._panel_cache[0][1] is not first_cached[1]
+
+
+def test_build_transformed_where_only_reuses_schema():
+    """where-only transform should reuse the upstream schema."""
+    import pandas as pd
+
+    from ecstacy.config.schema import PanelConfig
+    from ecstacy.core.dataset import DataSet
+    from ecstacy.screens.dashboard import DashboardScreen
+
+    ds = DataSet.from_dataframe(
+        pd.DataFrame({"region": ["us", "eu", "ap"], "value": [10.0, 20.0, 30.0]}),
+        source_id="s", kind="test",
+    )
+    screen = DashboardScreen.__new__(DashboardScreen)
+    panel = PanelConfig(source="s", viz="table", where="value > 15")
+    from ecstacy.core.transforms import Transform
+
+    frame = Transform(where="value > 15").apply(ds.frame)
+    result = screen._build_transformed(panel, ds, frame)
+    # Schema should be the same object as the upstream schema
+    assert result.schema is ds.schema
+    assert result.meta.rows == 2
+
+
+def test_build_transformed_select_only_subsets_schema():
+    """select-only transform should produce a schema subset."""
+    import pandas as pd
+
+    from ecstacy.config.schema import PanelConfig
+    from ecstacy.core.dataset import DataSet
+    from ecstacy.screens.dashboard import DashboardScreen
+
+    ds = DataSet.from_dataframe(
+        pd.DataFrame({"region": ["us", "eu"], "value": [10.0, 20.0], "count": [1, 2]}),
+        source_id="s", kind="test",
+    )
+    screen = DashboardScreen.__new__(DashboardScreen)
+    panel = PanelConfig(source="s", viz="table", select=["region", "value"])
+    from ecstacy.core.transforms import Transform
+
+    frame = Transform(select=["region", "value"]).apply(ds.frame)
+    result = screen._build_transformed(panel, ds, frame)
+    assert result.schema.columns == ["region", "value"]
+    assert "count" not in result.schema.columns
+    assert result.schema.roles["region"] == ds.schema.roles["region"]
+    assert result.schema.roles["value"] == ds.schema.roles["value"]
+

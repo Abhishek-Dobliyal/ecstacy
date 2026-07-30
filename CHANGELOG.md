@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.3] - 2026-07-30
+
+### Added
+- Dashboard per-panel transform cache: transformed `DataSet` objects are
+  cached per panel keyed by upstream dataset identity. On refresh ticks
+  where the upstream dataset hasn't changed (e.g. a REST TTL cache hit
+  returns the same object), the transform + `infer_schema` are skipped
+  entirely — the cached `DataSet` is delivered directly to the widget.
+
+### Changed
+- `_build_transformed` optimizes schema construction for simple transforms:
+  `where`-only filters reuse the upstream schema (no `infer_schema` call);
+  `select`/`limit`-only transforms slice the upstream schema as a subset.
+  Only `group_by`/`agg`/`resample` transforms (which change the column set)
+  require a full `infer_schema`.
+- Panel cache is cleared on layout rebuild (`m` toggle / panel switch) to
+  stay safe across panel index changes.
+
 ## [0.9.2] - 2026-07-30
 
 ### Added

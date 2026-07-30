@@ -12,7 +12,7 @@ from textual.widget import Widget
 from textual.widgets import Footer, Header, Label
 
 from ecstacy.config.schema import DashboardConfig, PanelConfig
-from ecstacy.core.dataset import DataSet
+from ecstacy.core.dataset import DataSet, Meta, Schema
 from ecstacy.core.scheduler import Job, Scheduler
 from ecstacy.core.transforms import Transform, TransformError
 from ecstacy.sources.base import Source, SourceError, SourceSpec, create_source
@@ -98,6 +98,7 @@ class DashboardScreen(Screen):
         self._stream_workers: list[Worker] = []
         self._stream_sources: set[str] = set()
         self._panel_widgets: dict[int, Widget] = {}
+        self._panel_cache: dict[int, tuple[int, DataSet]] = {}
         self._panels_built = False
         self._render_pending = False
 
@@ -275,20 +276,23 @@ class DashboardScreen(Screen):
             return
 
         def _work() -> None:
-            # transforms + schema inference run off the UI thread
+            # transforms + schema inference run off the UI thread; the
+            # per-panel cache skips both when the upstream dataset hasn't
+            # changed since the last tick.
             results: list[tuple[int, DataSet | TransformError]] = []
+            upstream_id = id(dataset)
             for idx, panel in targets:
+                cached = self._panel_cache.get(idx)
+                if cached is not None and cached[0] == upstream_id:
+                    results.append((idx, cached[1]))
+                    continue
                 try:
                     frame = self._apply_transform(panel, dataset.frame)
-                    transformed = DataSet.from_dataframe(
-                        frame,
-                        source_id=dataset.meta.source_id,
-                        kind=dataset.meta.kind,
-                        diet=False,
-                    )
+                    transformed = self._build_transformed(panel, dataset, frame)
                 except TransformError as error:
                     results.append((idx, error))
                 else:
+                    self._panel_cache[idx] = (upstream_id, transformed)
                     results.append((idx, transformed))
             try:
                 self.app.call_from_thread(self._apply_panel_results, results)
@@ -336,6 +340,7 @@ class DashboardScreen(Screen):
         holder = self.query_one("#dashboard-holder", Container)
         await holder.remove_children()
         self._panel_widgets = {}
+        self._panel_cache = {}
         self._panels_built = False
         if not self.dashboard.panels:
             await holder.mount(Label("dashboard has no panels"))
@@ -391,15 +396,61 @@ class DashboardScreen(Screen):
             frame = self._apply_transform(panel, dataset.frame)
         except TransformError as error:
             return container, Label(f"transform error: {error.message}")
-        transformed = DataSet.from_dataframe(
-            frame,
-            source_id=dataset.meta.source_id,
-            kind=dataset.meta.kind,
-            diet=False,
-        )
+        transformed = self._build_transformed(panel, dataset, frame)
+        self._panel_cache[index] = (id(dataset), transformed)
         mapping = _mapping_from_panel(panel)
         widget.set_data(transformed, mapping)
         return container, widget
+
+    def _build_transformed(
+        self, panel: PanelConfig, dataset: DataSet, frame: pd.DataFrame
+    ) -> DataSet:
+        """Build a DataSet from a transformed frame, optimizing schema
+        inference for transforms that don't change the column set.
+
+        - No transform: reuse the upstream dataset directly.
+        - where-only (filter rows): same schema, fewer rows — reuse schema.
+        - select/limit-only (subset columns): schema is a subset — slice it.
+        - group_by/agg/resample: columns change — full infer_schema.
+        """
+        has_transform = (
+            panel.where
+            or panel.group_by
+            or panel.select
+            or panel.limit is not None
+            or panel.agg != "sum"
+        )
+        if not has_transform:
+            return dataset
+        has_grouping = bool(panel.group_by) or bool(getattr(panel, "resample", None))
+        has_select = bool(panel.select)
+        has_where = bool(panel.where)
+        source_id = dataset.meta.source_id
+        kind = dataset.meta.kind
+        # where-only: same columns, fewer rows
+        if has_where and not has_grouping and not has_select:
+            return DataSet(
+                frame=frame,
+                schema=dataset.schema,
+                meta=Meta(source_id=source_id, kind=kind, rows=len(frame)),
+            )
+        # select/limit-only: schema is a subset of the upstream schema
+        if (has_select or panel.limit is not None) and not has_where and not has_grouping:
+            cols = [str(c) for c in frame.columns]
+            sub_schema = Schema(
+                columns=cols,
+                dtypes={c: dataset.schema.dtypes.get(c, str(frame[c].dtype)) for c in cols},
+                roles={c: dataset.schema.roles.get(c, "category") for c in cols},
+            )
+            return DataSet(
+                frame=frame,
+                schema=sub_schema,
+                meta=Meta(source_id=source_id, kind=kind, rows=len(frame)),
+            )
+        # full transform (group_by/agg/resample): columns differ
+        return DataSet.from_dataframe(
+            frame, source_id=source_id, kind=kind, diet=False,
+        )
 
     def _apply_transform(self, panel: PanelConfig, frame: pd.DataFrame) -> pd.DataFrame:
         has_transform = (
