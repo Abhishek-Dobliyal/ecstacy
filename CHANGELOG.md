@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.5] - 2026-07-30
+
+### Added
+- Chart data notes: each chart now reports when it is showing a subset of the
+  data. A compact footer label in the chart screen shows the note persistently
+  (e.g., `↓ 10,000 → 2,000 points`, `top 30 of 150 categories`, or
+  `last 2,000 of 10,000 rows`). A one-time toast is also emitted when the note
+  first appears after switching visualizations, so auto-refresh does not spam.
+  Dashboard panels show the note in their border subtitle. Covered for line,
+  scatter, histogram, heatmap, box, bar, and proportion charts.
+
+### Fixed
+- Search (`/`) and query (`ctrl+f`) bars are now only available in the table
+  view. The transform/query bar was previously visible on all visualizations,
+  and `ctrl+f` would focus it even when the active chart ignored the query.
+  Both the search bar and the query bar are now hidden for non-table views,
+  their keybindings only focus the inputs when the table is active, and the
+  footer no longer lists `/` or `ctrl+f` for non-table visualizations.
+
 ## [0.10.4] - 2026-07-30
 
 ### Fixed

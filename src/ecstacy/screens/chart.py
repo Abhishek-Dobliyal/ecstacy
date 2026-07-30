@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal
 from textual.screen import Screen
 from textual.widget import Widget
-from textual.widgets import DataTable, Footer, Header, Input
+from textual.widgets import DataTable, Footer, Header, Input, Label
 
 from ecstacy.core.dataset import DataSet
 from ecstacy.core.scheduler import Job, Scheduler
@@ -41,6 +42,11 @@ class ChartScreen(Screen):
     }
     ChartScreen #viz-holder {
         height: 1fr;
+    }
+    ChartScreen #chart-note {
+        height: 1;
+        content-align: center middle;
+        color: $text-muted;
     }
     """
     BINDINGS = [
@@ -80,6 +86,20 @@ class ChartScreen(Screen):
         self._transform_cache_key: tuple[int, str] | None = None
         self._viz_pool: dict[str, Widget] = {}
         self._active_widget: Widget | None = None
+        self._toast_note = False
+
+    def _on_chart_note(self, note: str | None) -> None:
+        """Update the chart footer label and toast once on note change."""
+        label = self.query_one("#chart-note", Label)
+        if note:
+            label.update(note)
+            label.display = True
+            if self._toast_note:
+                self.notify(note, severity="information")
+                self._toast_note = False
+        else:
+            label.update("")
+            label.display = False
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -95,10 +115,12 @@ class ChartScreen(Screen):
                 id="transform-bar",
             )
         yield Container(id="viz-holder")
+        yield Label("", id="chart-note")
         yield Footer()
 
     def action_focus_transform(self) -> None:
-        self.query_one("#transform-bar", Input).focus()
+        if self._active_widget is not None and hasattr(self._active_widget, "set_search"):
+            self.query_one("#transform-bar", Input).focus()
 
     def action_focus_search(self) -> None:
         if self._active_widget is not None and hasattr(self._active_widget, "set_search"):
@@ -224,6 +246,18 @@ class ChartScreen(Screen):
             widget.set_data(dataset, self.mapping)  # type: ignore[attr-defined]
         self._update_border(dataset)
 
+    def _update_table_bindings(self, is_table: bool) -> None:
+        """Show the search/query footer bindings only in table view."""
+        for key in ("slash", "ctrl+f"):
+            try:
+                bindings = self._bindings.get_bindings_for_key(key)
+            except Exception:
+                continue
+            self._bindings.key_to_bindings[key] = [
+                replace(binding, show=is_table) for binding in bindings
+            ]
+        self.refresh_bindings()
+
     def _update_border(self, dataset: DataSet | None = None) -> None:
         dataset = dataset or self.dataset
         holder = self.query_one("#viz-holder", Container)
@@ -315,12 +349,19 @@ class ChartScreen(Screen):
             widget = self._viz_pool[name]
             widget.display = True
         self._active_widget = widget
-        # Show search bar for table only; preserve previous search.
+        # Show search/query bars for table only; preserve previous search.
         search_bar = self.query_one("#search-bar", Input)
+        transform_bar = self.query_one("#transform-bar", Input)
         is_table = hasattr(widget, "set_search")
         search_bar.display = is_table
+        transform_bar.display = is_table
+        self._update_table_bindings(is_table)
         if is_table:
             search_bar.value = widget._search_value  # type: ignore[attr-defined]
+        else:
+            if hasattr(widget, "set_on_note"):
+                widget.set_on_note(self._on_chart_note)
+                self._toast_note = True
         dataset = self._get_transformed_dataset()
         widget.set_data(dataset, self.mapping)  # type: ignore[attr-defined]
         self._update_border(dataset)

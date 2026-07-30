@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 import pandas as pd
@@ -70,8 +71,14 @@ class PlotWidget(PlotextPlot):
         self._render_size: tuple[int, int] | None = None
         self._auto_mapping_cache: ColumnMapping | None = None
         self._auto_mapping_key: tuple | None = None
+        self._on_note: Callable[[str | None], None] | None = None
+        self._last_note: str | None = None
 
     # public API
+
+    def set_on_note(self, callback: Callable[[str | None], None] | None) -> None:
+        """Set a callback that fires when the chart's data-note changes."""
+        self._on_note = callback
 
     def set_data(self, dataset: DataSet, mapping: ColumnMapping | None = None) -> None:
         self._dataset = dataset
@@ -147,6 +154,11 @@ class PlotWidget(PlotextPlot):
         if gen != self._render_gen or not self.is_mounted:
             return
         self._render_data = payload
+        note = getattr(payload, "note", None)
+        if note != self._last_note:
+            self._last_note = note
+            if self._on_note is not None:
+                self._on_note(note)
         self._paint_from_cache()
 
     def _paint_from_cache(self) -> None:

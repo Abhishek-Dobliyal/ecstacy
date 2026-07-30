@@ -392,6 +392,11 @@ class DashboardScreen(Screen):
         transformed = self._build_transformed(panel, dataset, frame)
         self._panel_cache[index] = (id(dataset), transformed)
         mapping = _mapping_from_panel(panel)
+        if hasattr(widget, "set_on_note"):
+            def _on_note(note: str | None) -> None:
+                if container.is_attached:
+                    container.border_subtitle = note or ""
+            widget.set_on_note(_on_note)
         widget.set_data(transformed, mapping)  # type: ignore[attr-defined]
         return container, widget
 

@@ -189,6 +189,7 @@ class _LinePayload:
     title: str = ""
     xlabel: str | None = None
     ylabel: str | None = None
+    note: str | None = None
 
 
 @dataclass
@@ -198,6 +199,7 @@ class _BarPayload:
     title: str = ""
     xlabel: str | None = None
     ylabel: str | None = None
+    note: str | None = None
 
 
 @dataclass
@@ -207,6 +209,7 @@ class _HistPayload:
     title: str = ""
     xlabel: str | None = None
     ylabel: str | None = None
+    note: str | None = None
 
 
 @dataclass
@@ -216,12 +219,14 @@ class _ScatterPayload:
     title: str = ""
     xlabel: str | None = None
     ylabel: str | None = None
+    note: str | None = None
 
 
 @dataclass
 class _HeatmapPayload:
     corr: pd.DataFrame | None = None
     title: str = ""
+    note: str | None = None
 
 
 @dataclass
@@ -230,6 +235,7 @@ class _BoxPayload:
     data: list[list[float]] = field(default_factory=list)
     title: str = ""
     ylabel: str | None = None
+    note: str | None = None
 
 
 @dataclass
@@ -237,6 +243,7 @@ class _ProportionPayload:
     labels: list[str] = field(default_factory=list)
     values: list[float] = field(default_factory=list)
     title: str = ""
+    note: str | None = None
 
 
 # Line
@@ -252,6 +259,7 @@ class LineChart(PlotWidget):
         xcol = mapping.x if mapping.x and mapping.x in frame.columns else None
         work = frame
         series_list: list[_LineSeries] = []
+        downsampled = False
         for col in ycols:
             yvals_raw = numeric(work[col]).dropna()
             if yvals_raw.empty:
@@ -268,6 +276,7 @@ class LineChart(PlotWidget):
                         budget,
                     )
                     series_list.append(_LineSeries(x=xs.tolist(), y=ys.tolist(), label=col))
+                    downsampled = True
                 else:
                     series_list.append(_LineSeries(
                         x=x_aligned.to_numpy(dtype=float).tolist(),
@@ -280,16 +289,19 @@ class LineChart(PlotWidget):
                     idx = np.arange(len(yvals))
                     _, ys = _lttb(idx, yvals, budget)
                     series_list.append(_LineSeries(x=None, y=ys.tolist(), label=col))
+                    downsampled = True
                 else:
                     series_list.append(_LineSeries(x=None, y=yvals.tolist(), label=col))
         title = " / ".join(ycols) if ycols else "line"
         if xcol:
             title = f"{title} over {xcol}"
+        note = f"↓ {len(work):,} → {budget:,} points" if downsampled else None
         return _LinePayload(
             series=series_list,
             title=title,
             xlabel=xcol,
             ylabel=", ".join(ycols) or None,
+            note=note,
         )
 
     def _paint(self, plt, payload: _LinePayload, theme) -> None:
@@ -332,12 +344,17 @@ class BarChart(PlotWidget):
             return _BarPayload(title="bar chart has no data after removing NaNs")
         grouped = work.groupby(category)[value].sum().sort_values(ascending=False).head(30)
         labels = [str(i) for i in grouped.index]
+        total_cats = work[category].nunique()
+        note = None
+        if len(grouped) < total_cats:
+            note = f"top {len(grouped)} of {total_cats} categories"
         return _BarPayload(
             labels=labels,
             values=grouped.tolist(),
             title=f"{value} by {category}",
             xlabel=category,
             ylabel=value,
+            note=note,
         )
 
     def _paint(self, plt, payload: _BarPayload, theme) -> None:
@@ -370,17 +387,20 @@ class Histogram(PlotWidget):
             return _HistPayload(title="")
         # Truncate before coercion/dropna so they run on ≤budget rows.
         series = frame[column]
-        if len(series) > budget:
+        total = len(series)
+        if total > budget:
             series = series.tail(budget)
         values = numeric(series).dropna().tolist()
         if not values:
             return _HistPayload(title=f"no numeric data for {column}")
+        note = f"last {len(values):,} of {total:,} values" if total > budget else None
         return _HistPayload(
             values=values,
             bins=mapping.bins,
             title=f"distribution of {column}",
             xlabel=column,
             ylabel="count",
+            note=note,
         )
 
     def _paint(self, plt, payload: _HistPayload, theme) -> None:
@@ -411,16 +431,20 @@ class Scatter(PlotWidget):
         work = frame[[x, y]].dropna()
         if work.empty:
             return _ScatterPayload(title="scatter has no overlapping x/y data")
+        total = len(work)
         xvals = numeric(_to_numeric_or_timestamp(work[x])).to_numpy(dtype=float)
         yvals = numeric(work[y]).to_numpy(dtype=float)
-        if len(xvals) > budget:
+        downsampled = len(xvals) > budget
+        if downsampled:
             xvals, yvals = _downsample_xy(xvals, yvals, budget)
+        note = f"↓ {total:,} → {budget:,} points" if downsampled else None
         return _ScatterPayload(
             x=xvals.tolist(),
             y=yvals.tolist(),
             title=f"{y} vs {x}",
             xlabel=x,
             ylabel=y,
+            note=note,
         )
 
     def _paint(self, plt, payload: _ScatterPayload, theme) -> None:
@@ -446,10 +470,12 @@ class Heatmap(PlotWidget):
         numbers = frame.select_dtypes("number")
         if numbers.shape[1] < 2:
             return _HeatmapPayload(title="heatmap needs at least two numeric columns")
-        if len(numbers) > budget:
+        total = len(numbers)
+        if total > budget:
             numbers = numbers.tail(budget)
         corr = numbers.corr().fillna(0.0).round(2)
-        return _HeatmapPayload(corr=corr, title="correlation matrix")
+        note = f"last {len(numbers):,} of {total:,} rows" if total > budget else None
+        return _HeatmapPayload(corr=corr, title="correlation matrix", note=note)
 
     def _paint(self, plt, payload: _HeatmapPayload, theme) -> None:
         if payload.corr is None:
@@ -482,34 +508,45 @@ class BoxPlot(PlotWidget):
             grouped = frame.dropna(subset=[value, category]).groupby(category)[value]
             labels: list[str] = []
             data: list[list[float]] = []
+            total_values = 0
+            shown_values = 0
             for cat, group in grouped:
                 vals = numeric(group).dropna()
+                total_values += len(vals)
                 if len(vals) > budget:
                     vals = vals.tail(budget)
                 vals = vals.tolist()
+                shown_values += len(vals)
                 if not vals:
                     continue
                 labels.append(str(cat))
                 data.append(vals)
             if not data:
                 return _BoxPayload(title=f"no data for {value}")
+            note = None
+            if total_values > shown_values:
+                note = f"last {shown_values:,} of {total_values:,} values"
             return _BoxPayload(
                 labels=labels,
                 data=data,
                 title=f"{value} by {category}",
                 ylabel=value,
+                note=note,
             )
         else:
             series = numeric(frame[value]).dropna()
-            if len(series) > budget:
+            total = len(series)
+            if total > budget:
                 series = series.tail(budget)
             if series.empty:
                 return _BoxPayload(title=f"no data for {value}")
+            note = f"last {len(series):,} of {total:,} values" if total > budget else None
             return _BoxPayload(
                 labels=[value],
                 data=[series.tolist()],
                 title=f"distribution of {value}",
                 ylabel=value,
+                note=note,
             )
 
     def _paint(self, plt, payload: _BoxPayload, theme) -> None:
@@ -552,10 +589,15 @@ class ProportionChart(PlotWidget):
             return _ProportionPayload(title="proportion chart has no data after removing NaNs")
         grouped = work.groupby(category)[value].sum().sort_values(ascending=False).head(20)
         labels = [str(i) for i in grouped.index]
+        total_cats = work[category].nunique()
+        note = None
+        if len(grouped) < total_cats:
+            note = f"top {len(grouped)} of {total_cats} categories"
         return _ProportionPayload(
             labels=labels,
             values=grouped.tolist(),
             title=f"{value} by {category}",
+            note=note,
         )
 
     def _paint(self, plt, payload: _ProportionPayload, theme) -> None:

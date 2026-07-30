@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 
 from ecstacy.widgets import charts
+from ecstacy.widgets.base import ColumnMapping
 
 
 def test_hex_rgb_parses_shorthand():
@@ -377,3 +378,73 @@ def test_lttb_preserves_endpoints():
     assert sx[-1] == x[-1]
     assert sy[0] == y[0]
     assert sy[-1] == y[-1]
+
+
+# -----------------------------------------------------------------------
+# Chart data notes
+# -----------------------------------------------------------------------
+
+def test_line_chart_note_when_downsampled():
+    frame = pd.DataFrame({"x": range(1000), "y": range(1000)})
+    payload = charts.LineChart()._prepare(
+        frame, ColumnMapping(x="x", y=["y"]), 100
+    )
+    assert payload.note == "↓ 1,000 → 100 points"
+
+
+def test_line_chart_no_note_when_under_budget():
+    frame = pd.DataFrame({"x": range(50), "y": range(50)})
+    payload = charts.LineChart()._prepare(
+        frame, ColumnMapping(x="x", y=["y"]), 100
+    )
+    assert payload.note is None
+
+
+def test_scatter_chart_note_when_downsampled():
+    frame = pd.DataFrame({"x": range(1000), "y": range(1000)})
+    payload = charts.Scatter()._prepare(
+        frame, ColumnMapping(x="x", y=["y"]), 100
+    )
+    assert payload.note == "↓ 1,000 → 100 points"
+
+
+def test_histogram_note_when_truncated():
+    frame = pd.DataFrame({"value": range(1000)})
+    payload = charts.Histogram()._prepare(
+        frame, ColumnMapping(value="value"), 100
+    )
+    assert payload.note == "last 100 of 1,000 values"
+
+
+def test_heatmap_note_when_truncated():
+    frame = pd.DataFrame({"a": range(1000), "b": range(1000), "c": range(1000)})
+    payload = charts.Heatmap()._prepare(frame, ColumnMapping(), 100)
+    assert payload.note == "last 100 of 1,000 rows"
+
+
+def test_box_chart_note_when_truncated():
+    frame = pd.DataFrame({"value": range(1000)})
+    payload = charts.BoxPlot()._prepare(
+        frame, ColumnMapping(value="value"), 100
+    )
+    assert payload.note == "last 100 of 1,000 values"
+
+
+def test_bar_chart_note_when_truncated():
+    frame = pd.DataFrame(
+        {"category": [f"c{i}" for i in range(40)], "value": range(40)}
+    )
+    payload = charts.BarChart()._prepare(
+        frame, ColumnMapping(category="category", value="value"), 100
+    )
+    assert payload.note == "top 30 of 40 categories"
+
+
+def test_proportion_chart_note_when_truncated():
+    frame = pd.DataFrame(
+        {"category": [f"c{i}" for i in range(25)], "value": range(25)}
+    )
+    payload = charts.ProportionChart()._prepare(
+        frame, ColumnMapping(category="category", value="value"), 100
+    )
+    assert payload.note == "top 20 of 25 categories"
