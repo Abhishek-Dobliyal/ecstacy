@@ -99,6 +99,8 @@ class DashboardScreen(Screen):
         self._stream_sources: set[str] = set()
         self._panel_widgets: dict[int, Widget] = {}
         self._panel_cache: dict[int, tuple[int, DataSet]] = {}
+        self._single_pool: dict[int, Container] = {}
+        self._panel_widget_data: dict[int, int] = {}
         self._panels_built = False
         self._render_pending = False
 
@@ -260,11 +262,19 @@ class DashboardScreen(Screen):
         dataset = self._datasets.get(source_id)
         if dataset is None:
             return
-        # Missing or errored panels need a full rebuild.
-        needs_rebuild = any(
-            panel.source == source_id and idx not in self._panel_widgets
-            for idx, panel in enumerate(self.dashboard.panels)
-        )
+        # Missing or errored panels need a full rebuild. In single-panel
+        # mode only the visible panel matters — hidden/unvisited panels are
+        # created lazily by _show_single_panel.
+        if self._multi_panel:
+            needs_rebuild = any(
+                panel.source == source_id and idx not in self._panel_widgets
+                for idx, panel in enumerate(self.dashboard.panels)
+            )
+        else:
+            needs_rebuild = (
+                self.dashboard.panels[self._panel_index].source == source_id
+                and self._panel_index not in self._panel_widgets
+            )
         if needs_rebuild:
             self._schedule_rebuild()
             return
@@ -313,7 +323,16 @@ class DashboardScreen(Screen):
                     severity="error",
                 )
                 continue
+            if not self._multi_panel:
+                container = self._single_pool.get(idx)
+                if container is not None and container.display is False:
+                    # Hidden pooled panel — skip the paint/rebuild; it is
+                    # refreshed lazily from _panel_cache when shown again.
+                    continue
             widget.set_data(result, _mapping_from_panel(self.dashboard.panels[idx]))  # type: ignore[attr-defined]
+            cached = self._panel_cache.get(idx)
+            if cached is not None:
+                self._panel_widget_data[idx] = cached[0]
 
     async def action_refresh(self) -> None:
         has_poll = self._scheduler is not None and bool(self._jobs)
@@ -341,6 +360,8 @@ class DashboardScreen(Screen):
         await holder.remove_children()
         self._panel_widgets = {}
         self._panel_cache = {}
+        self._single_pool = {}
+        self._panel_widget_data = {}
         self._panels_built = False
         if not self.dashboard.panels:
             await holder.mount(Label("dashboard has no panels"))
@@ -368,15 +389,49 @@ class DashboardScreen(Screen):
                     self._panel_widgets[idx] = content
 
     async def _render_single(self, holder: Container) -> None:
-        panel = self.dashboard.panels[self._panel_index]
-        container, content = self._prepare_panel_widget(self._panel_index, panel)
-        await holder.mount(container)
-        if content is not None:
-            await container.mount(content)
-            if not isinstance(content, Label):
-                self._panel_widgets[self._panel_index] = content
+        await self._show_single_panel()
+
+    async def _show_single_panel(self) -> None:
+        """Show the current panel in single-panel mode.
+
+        Panels are pooled (created lazily on first visit, then hidden with
+        display=False) so cycling n/p doesn't tear down and rebuild widgets
+        every time.  A panel whose source data changed while it was hidden
+        is refreshed from _panel_cache on show.
+        """
+        holder = self.query_one("#dashboard-holder", Container)
+        index = self._panel_index
+        panel = self.dashboard.panels[index]
+        for other in self._single_pool.values():
+            other.display = False
+        pooled = self._single_pool.get(index)
+        has_data = self._datasets.get(panel.source) is not None
+        if pooled is not None and (index in self._panel_widgets or not has_data):
+            pooled.display = True
+            widget = self._panel_widgets.get(index)
+            cached = self._panel_cache.get(index)
+            if (
+                widget is not None
+                and cached is not None
+                and self._panel_widget_data.get(index) != cached[0]
+            ):
+                widget.set_data(cached[1], _mapping_from_panel(panel))  # type: ignore[attr-defined]
+                self._panel_widget_data[index] = cached[0]
+        else:
+            if pooled is not None:
+                # Stale placeholder (e.g. a "source not loaded" label whose
+                # data has since arrived) — replace it with a real widget.
+                await pooled.remove()
+                del self._single_pool[index]
+            container, content = self._prepare_panel_widget(index, panel)
+            await holder.mount(container)
+            self._single_pool[index] = container
+            if content is not None:
+                await container.mount(content)
+                if not isinstance(content, Label):
+                    self._panel_widgets[index] = content
         self.app.sub_title = (
-            f"{panel.viz} ({self._panel_index + 1}/{len(self.dashboard.panels)})"
+            f"{panel.viz} ({index + 1}/{len(self.dashboard.panels)})"
         )
 
     def _prepare_panel_widget(
@@ -404,6 +459,7 @@ class DashboardScreen(Screen):
                     container.border_subtitle = note or ""
             widget.set_on_note(_on_note)
         widget.set_data(transformed, mapping)  # type: ignore[attr-defined]
+        self._panel_widget_data[index] = id(dataset)
         return container, widget
 
     def _build_transformed(
@@ -479,10 +535,10 @@ class DashboardScreen(Screen):
         if self._multi_panel or not self.dashboard.panels:
             return
         self._panel_index = (self._panel_index + 1) % len(self.dashboard.panels)
-        await self._render_panels()
+        await self._show_single_panel()
 
     async def action_prev_panel(self) -> None:
         if self._multi_panel or not self.dashboard.panels:
             return
         self._panel_index = (self._panel_index - 1) % len(self.dashboard.panels)
-        await self._render_panels()
+        await self._show_single_panel()

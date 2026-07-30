@@ -57,6 +57,12 @@ class PlotWidget(PlotextPlot):
     A render-data cache keyed on ``(dataset identity, mapping, budget)``
     ensures theme toggles only re-paint (colors) without recomputing the
     series.  A generation counter discards stale worker results.
+
+    ``render()`` caches the built ``Text`` keyed on
+    ``(size, paint generation, theme)`` so unrelated repaints (focus
+    changes, border-title updates, display toggles) don't re-run plotext's
+    expensive rasterizer.  Only a real paint, resize, or theme change
+    rebuilds the plot.
     """
 
     viz_name = "plot"
@@ -69,6 +75,10 @@ class PlotWidget(PlotextPlot):
         self._render_key: tuple | None = None
         self._render_gen = 0
         self._render_size: tuple[int, int] | None = None
+        self._paint_gen = 0
+        self._needs_redraw = False
+        self._build_cache: Text | None = None
+        self._build_cache_key: tuple | None = None
         self._auto_mapping_cache: ColumnMapping | None = None
         self._auto_mapping_key: tuple | None = None
         self._on_note: Callable[[str | None], None] | None = None
@@ -99,6 +109,11 @@ class PlotWidget(PlotextPlot):
     def on_mount(self) -> None:
         super().on_mount()
         self.app.theme_changed_signal.subscribe(self, self._on_theme_changed)
+        if self._dataset is not None and self._render_data is None:
+            # set_data ran before the widget was mounted (e.g. dashboard
+            # panels), so redraw() was skipped — kick it off now or the
+            # plot would stay empty until the next data change.
+            self.redraw()
 
     # budget
 
@@ -131,7 +146,16 @@ class PlotWidget(PlotextPlot):
 
     def redraw(self) -> None:
         if self._dataset is None or self._mapping is None:
+            self._needs_redraw = False
             return
+        if self.size.width <= 0:
+            # Hidden (display: none) or not laid out yet — the budget depends
+            # on the real width, so preparing now would key the cache on the
+            # fallback budget and miss again once laid out.  Defer until
+            # render() runs at a real size.
+            self._needs_redraw = True
+            return
+        self._needs_redraw = False
         key = self._content_key()
         if key == self._render_key and self._render_data is not None:
             return
@@ -171,6 +195,7 @@ class PlotWidget(PlotextPlot):
     def _paint_from_cache(self) -> None:
         if self._render_data is None:
             return
+        self._paint_gen += 1  # invalidate the built-renderable cache
         plt = self.plt
         plt.clear_figure()
         self._render_size = None
@@ -183,13 +208,24 @@ class PlotWidget(PlotextPlot):
     # Textual render hook
 
     def render(self) -> RenderResult:
+        if self._needs_redraw:
+            # Consume a redraw deferred while the widget had no size; at a
+            # real width this either early-returns (cache hit) or dispatches
+            # the prepare worker, whose delivery refreshes us again.
+            self.redraw()
         w, h = self.size.width, self.size.height
+        key = (w, h, self._paint_gen, self.app.theme)
+        if key == self._build_cache_key and self._build_cache is not None:
+            return self._build_cache
         if self._render_size != (w, h):
             self._plot.plotsize(w, h)
             self._plot._set_size(w, h)
             self._render_size = (w, h)
         self._plot.theme(self._get_plotext_theme_name(self.app.theme))
-        return Text.from_ansi(self._plot.build())
+        text = Text.from_ansi(self._plot.build())
+        self._build_cache = text
+        self._build_cache_key = key
+        return text
 
     # subclass hooks
 

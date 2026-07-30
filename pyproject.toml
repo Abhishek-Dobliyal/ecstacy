@@ -1,6 +1,6 @@
 [project]
 name = "ecstacy-tui"
-version = "0.10.7"
+version = "0.10.8"
 description = "A Textual TUI for beautiful terminal data visualization from files, REST endpoints and more."
 readme = "README.md"
 requires-python = ">=3.11"

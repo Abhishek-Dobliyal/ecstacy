@@ -187,6 +187,52 @@ def test_set_data_resets_sort_and_hidden_on_column_change():
     assert tv._hidden_columns == set()
 
 
+@pytest.mark.asyncio
+async def test_set_data_skips_repopulate_on_identical_frame():
+    """Cycling back to the table with the same dataset object must not
+    rebuild the rows (clear + add_rows is expensive)."""
+    from textual.app import App
+    from textual.widgets import DataTable
+
+    from ecstacy.core.dataset import DataSet
+    from ecstacy.screens.chart import ChartScreen
+
+    ds = DataSet.from_dataframe(_sample(), source_id="s", kind="test")
+
+    class _App(App):
+        def on_mount(self):
+            self.push_screen(ChartScreen(ds, "table"))
+
+    app = _App()
+    async with app.run_test() as pilot:
+        for _ in range(8):
+            await pilot.pause()
+        tv = app.screen._active_widget
+        table = tv.query_one("#table-data", DataTable)
+        await app.workers.wait_for_complete()
+        for _ in range(4):
+            await pilot.pause()
+        rows_before = table.row_count
+        populates = 0
+        real_populate = tv._populate
+
+        def counting_populate(search=""):
+            nonlocal populates
+            populates += 1
+            return real_populate(search)
+
+        tv._populate = counting_populate
+        # Same dataset object → no repopulate.
+        tv.set_data(ds)
+        await pilot.pause()
+        assert populates == 0
+        assert table.row_count == rows_before
+        # New dataset object → repopulate.
+        tv.set_data(DataSet.from_dataframe(_sample(), source_id="s", kind="test"))
+        await pilot.pause()
+        assert populates == 1
+
+
 def test_fmt_blanks_nan_and_nat():
     from ecstacy.widgets.table import _fmt
 
@@ -285,6 +331,44 @@ async def test_table_column_picker_hides_columns():
         assert "a" in col_names
         assert "c" in col_names
         assert "b" not in col_names
+
+
+@pytest.mark.asyncio
+async def test_column_picker_enter_toggles_first_item_immediately():
+    """The picker opens with the first row highlighted, so pressing enter
+    right away toggles it (previously index was None and enter no-opped)."""
+    from textual.app import App
+    from textual.widgets import DataTable
+
+    from ecstacy.core.dataset import DataSet
+    from ecstacy.screens.chart import ChartScreen
+    from ecstacy.screens.modals import ColumnPickerScreen
+
+    class _App(App):
+        def on_mount(self):
+            df = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
+            ds = DataSet.from_dataframe(df, source_id="s", kind="test")
+            self.push_screen(ChartScreen(ds, "table"))
+
+    app = _App()
+    async with app.run_test() as pilot:
+        for _ in range(6):
+            await pilot.pause()
+        await pilot.press("c")
+        for _ in range(6):
+            await pilot.pause()
+        assert isinstance(app.screen, ColumnPickerScreen)
+        await pilot.press("enter")  # toggles "a" without needing an arrow first
+        for _ in range(4):
+            await pilot.pause()
+        assert app.screen.hidden == {"a"}
+        await pilot.press("escape")
+        await app.workers.wait_for_complete()
+        for _ in range(6):
+            await pilot.pause()
+        dt = app.screen.query_one("TableView").query_one("#table-data", DataTable)
+        col_names = [str(col.label) for col in dt.columns.values()]
+        assert col_names == ["b"]
 
 
 # -----------------------------------------------------------------------

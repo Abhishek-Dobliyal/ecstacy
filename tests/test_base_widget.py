@@ -155,6 +155,41 @@ async def test_plotwidget_clears_worker_ref_after_delivery():
 
 
 @pytest.mark.asyncio
+async def test_render_caches_built_plot_until_next_paint():
+    """Repaints without new data/size/theme reuse the cached renderable
+    instead of re-running plotext's expensive build()."""
+    from textual.app import App
+
+    class _App(App):
+        def compose(self):
+            yield CountingPlot()
+
+    app = _App()
+    async with app.run_test() as pilot:
+        widget = app.query_one(CountingPlot)
+        widget.set_data(_dataset())
+        await _settle(app, pilot)
+        builds = 0
+        real_build = widget._plot.build
+
+        def counting_build():
+            nonlocal builds
+            builds += 1
+            return real_build()
+
+        widget._plot.build = counting_build
+        # Unrelated repaints: cached renderable returned, no rebuild.
+        for _ in range(3):
+            widget.refresh()
+            await pilot.pause()
+        assert builds == 0
+        # A new dataset → re-paint → exactly one rebuild.
+        widget.set_data(_dataset())
+        await _settle(app, pilot)
+        assert builds == 1
+
+
+@pytest.mark.asyncio
 async def test_plotwidget_skips_delivery_when_cancelled():
     """A widget unmounted mid-prepare skips the paint delivery."""
     global _paint_calls

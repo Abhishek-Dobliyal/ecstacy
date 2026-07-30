@@ -383,6 +383,7 @@ class ChartScreen(Screen):
             f"{dataset.meta.source_id}  |  {name}  "
             f"({self.index + 1}/{len(self.names)})"
         )
-        widget.styles.opacity = 0.0
-        widget.styles.animate("opacity", 1.0, duration=0.25, easing="out_cubic")
+        # NOTE: no fade-in animation here — animating opacity refreshes the
+        # widget every animation frame, which forces a full plotext rebuild
+        # (~100ms+) per frame and stalls the UI on every viz switch.
         self._focus_content(widget)

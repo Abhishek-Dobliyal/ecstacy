@@ -167,6 +167,14 @@ class TableView(Vertical):
 
     def set_data(self, dataset: DataSet, mapping: ColumnMapping | None = None) -> None:
         new_frame = dataset.frame
+        if (
+            new_frame is self._frame
+            and self.is_mounted
+            and self._full_view is not None
+        ):
+            # Same data object already rendered (e.g. cycling back to this
+            # view) — skip the costly clear + re-insert of table rows.
+            return
         new_sig = tuple(str(c) for c in new_frame.columns)
         if new_sig != self._columns_signature:
             self._sort_cols = []

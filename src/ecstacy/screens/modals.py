@@ -87,6 +87,10 @@ class ColumnPickerScreen(ModalScreen):
         for col in self.columns:
             marker = "[dim]○[/dim]" if col in self.hidden else "[green]●[/green]"
             lv.append(ListItem(Label(f"{marker}  {col}"), name=col))
+        # ListView starts with index=None; without this the first enter
+        # keypress is a no-op until the user arrows once.
+        if self.columns:
+            lv.index = 0
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         col = str(event.item.name)

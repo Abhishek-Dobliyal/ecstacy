@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.8] - 2026-07-30
+
+### Fixed
+- Chart switching no longer stutters. `PlotWidget.render()` now caches the
+  built plot (`Text`) keyed on size, paint generation, and theme, so
+  unrelated repaints (focus changes, border-title updates, display toggles,
+  revisiting a pooled chart) no longer re-run plotext's rasterizer
+  (~75–200ms per call at typical terminal sizes). Revisiting a chart now
+  costs zero rebuilds.
+- Removed the 0.25s opacity fade-in on viz switches: animating `opacity`
+  refreshes the widget on every 60fps animation frame, which forced a full
+  plotext rebuild per frame — several hundred milliseconds of blocked UI on
+  every switch, and the main source of the "navigate fast" jank.
+- `PlotWidget.redraw()` defers when the widget has no size yet (hidden or
+  freshly mounted). The downsample budget derives from the widget width,
+  which is 0 pre-layout, so preparing immediately keyed the render cache on
+  the fallback budget and missed again after layout — an oscillating
+  re-prepare/re-paint on every viz revisit.
+- Dashboard panels now paint on first render. `_prepare_panel_widget` calls
+  `set_data` before the widget is mounted, so `redraw()` was skipped and
+  nothing re-triggered it — panels stayed empty until the next refresh
+  tick (forever when `refresh` is 0). `PlotWidget.on_mount` now kicks off
+  the deferred redraw.
+- `TableView.set_data` skips the clear + re-insert of rows when handed the
+  same frame object it already rendered (e.g. cycling back to the table),
+  avoiding a ~90ms bulk `add_rows` on every revisit.
+- The column picker (`c` in table view) now opens with the first row
+  highlighted; previously `ListView.index` was `None` on open, so pressing
+  enter immediately did nothing until an arrow key was pressed first.
+
+### Changed
+- Dashboard single-panel mode pools panels like `ChartScreen` does:
+  `n`/`p` now hides the current panel and shows (or lazily creates) the
+  target instead of tearing down and rebuilding every widget. Panels whose
+  data changed while hidden skip the refresh tick's paint/build and are
+  updated lazily from the transform cache when shown again.
+
 ## [0.10.7] - 2026-07-30
 
 ### Fixed
