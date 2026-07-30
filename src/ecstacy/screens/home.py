@@ -153,7 +153,7 @@ class HomeScreen(Screen):
         actions = {
             "q-open": self.action_open,
             "q-dashboard": self.action_dashboard,
-            "q-theme": self.app.action_toggle_theme,
+            "q-theme": self.app.action_toggle_theme,  # type: ignore[attr-defined]
             "q-help": self.action_help,
             "q-quit": self.app.exit,
         }
@@ -172,7 +172,7 @@ class HomeScreen(Screen):
             return
         spec = getattr(item, "_spec", None)
         if spec is not None:
-            self.app.open_source(spec)
+            self.app.open_source(spec)  # type: ignore[attr-defined]
 
     def action_refresh(self) -> None:
         self._refresh_recents()

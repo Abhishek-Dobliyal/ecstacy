@@ -79,7 +79,7 @@ class FileSource(Source):
                 frame[name] = pd.to_datetime(frame[name], errors="coerce")
         return frame
 
-    def fetch(self, keep_raw: bool = False) -> DataSet:
+    def fetch(self, keep_raw: bool = False, force: bool = False) -> DataSet:
         if self.is_stdin:
             return self._fetch_stdin(keep_raw=keep_raw)
         if not self.path.exists():

@@ -65,13 +65,7 @@ class Scheduler:
 
     def _fetch(self, job: Job, force: bool = False) -> None:
         try:
-            kwargs: dict[str, object] = {"keep_raw": job.keep_raw}
-            import inspect
-
-            sig = inspect.signature(job.source.fetch)
-            if "force" in sig.parameters:
-                kwargs["force"] = force
-            dataset = job.source.fetch(**kwargs)
+            dataset = job.source.fetch(keep_raw=job.keep_raw, force=force)
         except Exception as error:  # surfaced to the UI, never crashes the loop
             self._deliver(job.on_error, error)
         else:

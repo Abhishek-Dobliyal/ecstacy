@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from textual.widgets import Static
 
 from ecstacy.core import registry
 from ecstacy.core.dataset import DataSet
 from ecstacy.widgets.base import ColumnMapping, auto_mapping, numeric
+
+if TYPE_CHECKING:
+    from textual.timer import Timer
 
 _BAR_WIDTH = 24
 _TICK = 0.04
@@ -18,14 +23,14 @@ class GaugeView(Static):
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
-        self._name = ""
+        self._name: str = ""
         self._latest = 0.0
         self._delta = 0.0
         self._low = 0.0
         self._high = 1.0
         self._target_fill = 0
         self._step = 0
-        self._timer = None
+        self._timer: Timer | None = None
 
     def set_data(self, dataset: DataSet, mapping: ColumnMapping | None = None) -> None:
         # stop any running animation so error messages aren't overwritten
@@ -70,7 +75,8 @@ class GaugeView(Static):
         fill = int(progress * self._target_fill)
         self.update(_render(self._name, self._latest, self._delta, self._low, self._high, fill))
         if self._step >= _STEPS:
-            self._timer.stop()
+            if self._timer is not None:
+                self._timer.stop()
             self._timer = None
 
 

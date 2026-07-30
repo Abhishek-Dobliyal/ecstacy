@@ -1,14 +1,35 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pandas as pd
 from textual.app import ComposeResult
 from textual.containers import Vertical
 from textual.widgets import DataTable, Label
 
-from ecstacy.config import defaults
 from ecstacy.core import registry
 from ecstacy.core.dataset import DataSet
 from ecstacy.widgets.base import ColumnMapping
+
+if TYPE_CHECKING:
+    from textual.timer import Timer
+
+_PAGE_SIZE = 200
+
+
+class _LazyDataTable(DataTable):
+    """DataTable subclass that triggers a callback when the user scrolls
+    near the bottom, so the parent can load the next page of rows."""
+
+    def __init__(self, on_near_bottom, page_size: int, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._on_near_bottom = on_near_bottom
+        self._page_size = page_size
+
+    def watch_scroll_y(self, old_value: float, new_value: float) -> None:  # type: ignore[override]
+        super().watch_scroll_y(old_value, new_value)
+        if self.virtual_size.height - new_value - self.size.height < self._page_size:
+            self._on_near_bottom()
 
 
 @registry.viz.register("table")
@@ -39,7 +60,7 @@ class TableView(Vertical):
         self._frame: pd.DataFrame = pd.DataFrame()
         self._sort_cols: list[tuple[str, bool]] = []
         self._pending_dataset: DataSet | None = None
-        self._search_timer = None
+        self._search_timer: Timer | None = None
         self._search_value = ""
         self._hidden_columns: set[str] = set()
         self._string_frame: pd.DataFrame | None = None
@@ -47,9 +68,16 @@ class TableView(Vertical):
         self._search_gen = 0
         self._rendered_columns: tuple[str, ...] = ()
         self._columns_signature: tuple[str, ...] = ()
+        self._full_view: pd.DataFrame | None = None
+        self._loaded_count = 0
+        self._loading = False
 
     def compose(self) -> ComposeResult:
-        yield DataTable(id="table-data")
+        yield _LazyDataTable(
+            on_near_bottom=self._load_next_page,
+            page_size=_PAGE_SIZE,
+            id="table-data",
+        )
         yield Label("", id="table-footer")
 
     def on_mount(self) -> None:
@@ -131,7 +159,9 @@ class TableView(Vertical):
         work = self._filter_cached(work, self._search_value)
         return work[visible_columns]
 
-    def _on_columns_picked(self, hidden: set[str]) -> None:
+    def _on_columns_picked(self, hidden: set[str] | None) -> None:
+        if hidden is None:
+            return
         self._hidden_columns = hidden
         self._populate(self._search_value)
 
@@ -142,6 +172,7 @@ class TableView(Vertical):
             self._sort_cols = []
             self._hidden_columns = set()
             self._columns_signature = new_sig
+            self._loaded_count = 0
         # The string-frame cache is keyed on frame identity in
         # _string_frame_cached; let it invalidate naturally when the frame
         # object changes (refresh tick) instead of busting it here.
@@ -152,8 +183,8 @@ class TableView(Vertical):
             self._pending_dataset = dataset
 
     def _populate_after_debounce(self) -> None:
-        # filter/sort/row-building run off the UI thread; the generation
-        # counter discards results that arrive after a newer state
+        # filter/sort run off the UI thread; the generation counter discards
+        # results that arrive after a newer state
         self._search_gen += 1
         gen = self._search_gen
         search = self._search_value
@@ -165,7 +196,6 @@ class TableView(Vertical):
             strings = self._string_frame
             if strings is None or self._string_frame_source is not frame:
                 strings = frame.astype(str).apply(lambda col: col.str.lower())
-                # only cache if the frame hasn't been swapped since dispatch
                 if self._frame is frame:
                     self._string_frame = strings
                     self._string_frame_source = frame
@@ -179,20 +209,12 @@ class TableView(Vertical):
                 work = frame[mask]
             filtered_count = len(work)
             work = sort_frame_multi(work, sort_cols)
-            visible_columns = [
-                str(c) for c in work.columns if str(c) not in hidden
-            ]
-            capped = work.head(defaults.DEFAULT_MAX_ROWS)
-            rows = [
-                [_fmt(value) for value in row]
-                for row in capped[visible_columns].itertuples(index=False, name=None)
-            ]
             try:
                 self.app.call_from_thread(
                     self._deliver_search,
                     gen,
                     search,
-                    rows,
+                    work,
                     filtered_count,
                     len(frame),
                     sort_cols,
@@ -206,27 +228,24 @@ class TableView(Vertical):
         self,
         gen: int,
         search: str,
-        rows: list[list[str]],
+        full_view: pd.DataFrame,
         filtered_count: int,
         total_before: int,
         sort_cols: list[tuple[str, bool]],
     ) -> None:
         if gen != self._search_gen or not self.is_mounted:
             return
-        table = self.query_one("#table-data", DataTable)
-        table.clear()  # rows only; search doesn't change the column set
-        if rows:
-            table.add_rows(rows)
+        self._full_view = full_view
+        self._loaded_count = 0
+        self._render_table_rows()
         footer = self.query_one("#table-footer", Label)
         footer.update(
-            _footer_text(search, filtered_count, total_before, len(rows), sort_cols)
+            _footer_text(search, filtered_count, total_before, self._loaded_count, sort_cols)
         )
 
     def on_data_table_column_selected(self, event: DataTable.ColumnSelected) -> None:
         if event.data_table.id != "table-data":
             return
-        # Columns are added without keys, so column_key.value is None; resolve
-        # the column by its visual index instead.
         visible_columns = [
             str(c) for c in self._frame.columns if str(c) not in self._hidden_columns
         ]
@@ -255,8 +274,6 @@ class TableView(Vertical):
             return frame
         needle = search.lower()
         strings = self._string_frame_cached()
-        # hidden columns don't participate: a match the user can't see reads
-        # as a phantom row
         columns = [c for c in frame.columns if str(c) not in self._hidden_columns]
         mask = pd.Series(False, index=strings.index)
         for col in columns:
@@ -272,6 +289,8 @@ class TableView(Vertical):
         if frame.empty:
             table.clear(columns=True)
             self._rendered_columns = ()
+            self._full_view = None
+            self._loaded_count = 0
             return
         all_columns = [str(c) for c in frame.columns]
         visible_columns = [c for c in all_columns if c not in self._hidden_columns]
@@ -285,16 +304,60 @@ class TableView(Vertical):
         work = self._filter_cached(frame, search)
         filtered_count = len(work)
         work = sort_frame_multi(work, self._sort_cols)
-        work = work.head(defaults.DEFAULT_MAX_ROWS)
+        self._full_view = work
+        self._loaded_count = 0
+        self._render_table_rows()
+        footer = self.query_one("#table-footer", Label)
+        footer.update(
+            _footer_text(search, filtered_count, total_before, self._loaded_count, self._sort_cols)
+        )
+
+    def _render_table_rows(self) -> None:
+        """Load rows up to _loaded_count + _PAGE_SIZE from _full_view into the
+        DataTable, starting from the current _loaded_count."""
+        if self._full_view is None or self._loading:
+            return
+        self._loading = True
+        table = self.query_one("#table-data", DataTable)
+        visible_columns = [
+            str(c) for c in self._full_view.columns
+            if str(c) not in self._hidden_columns
+        ]
+        end = min(self._loaded_count + _PAGE_SIZE, len(self._full_view))
+        if end <= self._loaded_count:
+            self._loading = False
+            return
+        slc = self._full_view.iloc[self._loaded_count:end]
         rows = [
             [_fmt(value) for value in row]
-            for row in work[visible_columns].itertuples(index=False, name=None)
+            for row in slc[visible_columns].itertuples(index=False, name=None)
         ]
         if rows:
             table.add_rows(rows)
+        self._loaded_count = end
+        self._loading = False
+
+    def _load_next_page(self) -> None:
+        """Called by _LazyDataTable when the user scrolls near the bottom."""
+        if (
+            self._full_view is None
+            or self._loading
+            or self._loaded_count >= len(self._full_view)
+        ):
+            return
+        self._render_table_rows()
+        # Update footer to reflect newly loaded rows
         footer = self.query_one("#table-footer", Label)
+        total = len(self._full_view)
+        search = self._search_value
         footer.update(
-            _footer_text(search, filtered_count, total_before, len(rows), self._sort_cols)
+            _footer_text(
+                search,
+                total,
+                len(self._frame),
+                self._loaded_count,
+                self._sort_cols,
+            )
         )
 
 
@@ -310,11 +373,10 @@ def _footer_text(
         sort_text = "  ·  sorted by " + ", ".join(
             f"{c} {'↑' if a else '↓'}" for c, a in sort_cols
         )
-    count_text = (
-        f"showing {shown} of {filtered_count} rows"
-        if filtered_count > shown
-        else f"{filtered_count} rows"
-    )
+    if filtered_count > shown:
+        count_text = f"showing {shown} of {filtered_count} rows  ·  scroll for more"
+    else:
+        count_text = f"{filtered_count} rows"
     if search:
         count_text += f" (of {total_before})"
     return f"{count_text}{sort_text}"

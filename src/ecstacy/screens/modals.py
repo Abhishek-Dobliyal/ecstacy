@@ -3,7 +3,9 @@ from __future__ import annotations
 from textual.app import ComposeResult
 from textual.containers import Vertical
 from textual.screen import ModalScreen
-from textual.widgets import Input, Label, ListItem, ListView
+from textual.widgets import Input, Label, ListItem, ListView, Select
+
+from ecstacy.widgets.base import ColumnMapping
 
 
 class OpenScreen(ModalScreen):
@@ -41,9 +43,9 @@ class OpenScreen(ModalScreen):
         if not value:
             return
         if self.dashboard:
-            self.app.open_dashboard_path(value)
+            self.app.open_dashboard_path(value)  # type: ignore[attr-defined]
         else:
-            self.app.open_path(value)
+            self.app.open_path(value)  # type: ignore[attr-defined]
 
     def action_cancel(self) -> None:
         self.dismiss()
@@ -134,6 +136,109 @@ class ExportScreen(ModalScreen):
             if not path:
                 return
             self.dismiss((path, fmt))
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+
+# Fields shown per viz in the chart mapping picker.  Maps viz name to a
+# list of (field_name, label, is_multi) tuples.  Fields not listed here
+# are preserved from the existing mapping.
+VIZ_FIELDS: dict[str, list[tuple[str, str, bool]]] = {
+    "line": [("x", "X axis", False), ("y", "Y series (comma-sep)", True)],
+    "bar": [("category", "Category", False), ("value", "Value", False)],
+    "histogram": [("value", "Column", False)],
+    "scatter": [("x", "X axis", False), ("y", "Y axis", False)],
+    "box": [("value", "Value", False), ("category", "Category (optional)", False)],
+    "proportion": [("category", "Category", False), ("value", "Value", False)],
+    "sparkline": [("value", "Column", False)],
+    "gauge": [("value", "Column", False)],
+}
+
+VIZ_NO_MAPPING = {"heatmap", "table", "summary", "json"}
+
+
+class ChartMappingScreen(ModalScreen):
+    """Modal for picking which columns a chart plots.
+
+    Shows only the fields relevant to the current viz type.  Column
+    fields are ``Select`` dropdowns with an "(auto)" option that sets
+    the field to ``None``.  On confirm, a new ``ColumnMapping`` is
+    built from the existing one with picked fields overwritten.
+    """
+
+    DEFAULT_CSS = """
+    ChartMappingScreen {
+        align: center middle;
+    }
+    #mapping-box {
+        width: 60;
+        height: auto;
+        border: round $accent;
+        background: $surface;
+        padding: 1 2;
+    }
+    #mapping-box Select {
+        width: 100%;
+        margin: 0 0 1 0;
+    }
+    #mapping-box Label {
+        margin: 0 0 0 0;
+    }
+    """
+
+    BINDINGS = [("escape", "cancel", "Cancel"), ("enter", "confirm", "OK")]
+
+    def __init__(
+        self,
+        viz_name: str,
+        columns: list[str],
+        mapping: ColumnMapping,
+    ) -> None:
+        super().__init__()
+        self.viz_name = viz_name
+        self.columns = columns
+        self.mapping = mapping
+        self._fields = VIZ_FIELDS.get(viz_name, [])
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="mapping-box"):
+            yield Label(f"Map columns · {self.viz_name}")
+            for field, label, _is_multi in self._fields:
+                yield Label(label)
+                current = getattr(self.mapping, field)
+                if isinstance(current, list):
+                    current = current[0] if current else None
+                options = [("(auto)", None)] + [(c, c) for c in self.columns]
+                # Select requires at least one option; default to first
+                select = Select(
+                    options=options,
+                    value=current if current in self.columns else None,
+                    id=f"map-{field}",
+                )
+                yield select
+
+    def action_confirm(self) -> None:
+        result = ColumnMapping(
+            x=self.mapping.x,
+            y=list(self.mapping.y),
+            category=self.mapping.category,
+            value=self.mapping.value,
+            bins=self.mapping.bins,
+        )
+        for field, _label, is_multi in self._fields:
+            select = self.query_one(f"#map-{field}", Select)
+            value = select.value
+            if value is None or value == "(auto)":
+                if is_multi:
+                    setattr(result, field, [])
+                else:
+                    setattr(result, field, None)
+            elif is_multi:
+                setattr(result, field, [str(value)])
+            else:
+                setattr(result, field, str(value))
+        self.dismiss(result)
 
     def action_cancel(self) -> None:
         self.dismiss(None)

@@ -51,6 +51,7 @@ class ChartScreen(Screen):
         ("r", "refresh", "Refresh"),
         ("ctrl+f", "focus_transform", "Query"),
         ("slash", "focus_search", "Search"),
+        ("c", "column_picker", "Columns"),
         ("t", "app.toggle_theme", "Theme"),
         ("escape", "escape", "Back"),
     ]
@@ -102,6 +103,31 @@ class ChartScreen(Screen):
     def action_focus_search(self) -> None:
         if self._active_widget is not None and hasattr(self._active_widget, "set_search"):
             self.query_one("#search-bar", Input).focus()
+
+    def action_column_picker(self) -> None:
+        from ecstacy.screens.modals import VIZ_NO_MAPPING, ChartMappingScreen
+        from ecstacy.widgets.base import auto_mapping
+
+        name = self.names[self.index]
+        if name in VIZ_NO_MAPPING:
+            self.notify("this view has no column mapping", severity="information")
+            return
+        dataset = self._get_transformed_dataset()
+        columns = dataset.schema.columns
+        current = self.mapping or auto_mapping(dataset, name)
+        self.app.push_screen(
+            ChartMappingScreen(name, columns, current),
+            self._on_mapping_picked,
+        )
+
+    def _on_mapping_picked(self, result: ColumnMapping | None) -> None:
+        if result is None:
+            return
+        self.mapping = result
+        dataset = self._get_transformed_dataset()
+        if self._active_widget is not None and hasattr(self._active_widget, "set_data"):
+            self._active_widget.set_data(dataset, self.mapping)  # type: ignore[attr-defined]
+        self._update_border(dataset)
 
     def action_escape(self) -> None:
         """Escape exits the search/query input first; only pops the screen
@@ -177,7 +203,7 @@ class ChartScreen(Screen):
         except Exception as error:
             self._on_refresh_error(error)
         finally:
-            await stream.aclose()
+            await stream.aclose()  # type: ignore[attr-defined]
 
     def _on_refresh_data(self, dataset: DataSet) -> None:
         if not self.is_attached:
@@ -197,7 +223,7 @@ class ChartScreen(Screen):
         widget = self._active_widget
         dataset = self._get_transformed_dataset()
         if widget is not None and hasattr(widget, "set_data"):
-            widget.set_data(dataset, self.mapping)
+            widget.set_data(dataset, self.mapping)  # type: ignore[attr-defined]
         self._update_border(dataset)
 
     def _update_border(self, dataset: DataSet | None = None) -> None:
@@ -304,9 +330,9 @@ class ChartScreen(Screen):
         is_table = hasattr(widget, "set_search")
         search_bar.display = is_table
         if is_table:
-            search_bar.value = widget._search_value
+            search_bar.value = widget._search_value  # type: ignore[attr-defined]
         dataset = self._get_transformed_dataset()
-        widget.set_data(dataset, self.mapping)
+        widget.set_data(dataset, self.mapping)  # type: ignore[attr-defined]
         self._update_border(dataset)
         self.app.sub_title = (
             f"{dataset.meta.source_id}  |  {name}  "

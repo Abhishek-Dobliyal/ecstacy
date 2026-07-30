@@ -39,7 +39,7 @@ class SocketSource(Source):
     def describe(self) -> str:
         return f"socket:{self.url}"
 
-    def fetch(self, keep_raw: bool = False) -> DataSet:
+    def fetch(self, keep_raw: bool = False, force: bool = False) -> DataSet:
         try:
             records = asyncio.run(self._collect())
         except Exception as exc:

@@ -26,18 +26,19 @@ class Source(ABC):
     kind: str = "base"
     supports_stream: bool = False
     supports_progressive: bool = False
+    max_rows: int | None = None
 
     def __init__(self, id: str) -> None:
         self.id = id
 
     @abstractmethod
-    def fetch(self, keep_raw: bool = False) -> DataSet:
+    def fetch(self, keep_raw: bool = False, force: bool = False) -> DataSet:
         ...
 
     def describe(self) -> str:
         return f"{self.kind}:{self.id}"
 
-    async def stream(self) -> AsyncIterator[DataSet]:
+    async def stream(self, keep_raw: bool = False) -> AsyncIterator[DataSet]:
         raise NotImplementedError(f"{self.kind} source does not support streaming")
         yield  # pragma: no cover
 

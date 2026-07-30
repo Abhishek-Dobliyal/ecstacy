@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-07-30
+
+### Added
+- Chart column picker: press `c` on any chart view (line, bar, histogram,
+  scatter, box, proportion, sparkline, gauge) to open a modal that lets
+  you pick which columns to plot. Shows only the fields relevant to the
+  current viz (e.g. scatter shows x+y, bar shows category+value). An
+  "(auto)" option reverts a field to auto-pick. The mapping is sticky
+  across viz switches. `heatmap`, `table`, `summary`, and `json` notify
+  "no column mapping" since they ignore the mapping.
+- Table virtualization: the table now loads 200 rows initially and
+  appends 200 more when the user scrolls near the bottom, instead of
+  loading all 1000 upfront. The footer shows "scroll for more" when more
+  rows are available. Exports still return the full sorted+filtered frame
+  regardless of how many rows are loaded.
+- mypy in CI: type checking now runs on every push and PR alongside
+  pytest and ruff.
+
+### Changed
+- Bumped `tool.mypy.python_version` from 3.11 to 3.12 (numpy 2.5 stubs
+  use PEP 695 `type` statements that require 3.12+).
+- `Source.fetch` base signature now includes `force: bool = False`;
+  `Source.stream` now includes `keep_raw: bool = False`. All source
+  subclasses updated.
+- Removed the fixed `DEFAULT_MAX_ROWS=1000` display cap from the table;
+  replaced with page-based loading (`_PAGE_SIZE=200`).
+
 ## [0.9.4] - 2026-07-30
 
 ### Fixed

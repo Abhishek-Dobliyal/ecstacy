@@ -200,7 +200,10 @@ def test_fmt_blanks_nan_and_nat():
 def test_footer_text_shows_display_cap():
     from ecstacy.widgets.table import _footer_text
 
-    assert _footer_text("", 50000, 50000, 1000, []) == "showing 1000 of 50000 rows"
+    assert (
+        _footer_text("", 50000, 50000, 1000, [])
+        == "showing 1000 of 50000 rows  ·  scroll for more"
+    )
     text = _footer_text("us", 4, 10, 4, [("value", True)])
     assert "4 rows (of 10)" in text
     assert "sorted by value ↑" in text
@@ -279,3 +282,86 @@ async def test_table_column_picker_hides_columns():
         assert "a" in col_names
         assert "c" in col_names
         assert "b" not in col_names
+
+
+# -----------------------------------------------------------------------
+# Table virtualization (item 23b)
+# -----------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_table_loads_first_page_only():
+    """A large frame loads only _PAGE_SIZE rows initially."""
+    from textual.app import App
+
+    from ecstacy.core.dataset import DataSet
+    from ecstacy.screens.chart import ChartScreen
+    from ecstacy.widgets.table import _PAGE_SIZE
+
+    df = pd.DataFrame({"a": range(5000), "b": range(5000, 10000)})
+    ds = DataSet.from_dataframe(df, source_id="s", kind="test")
+
+    class _App(App):
+        def on_mount(self):
+            self.push_screen(ChartScreen(ds, "table"))
+
+    app = _App()
+    async with app.run_test() as pilot:
+        for _ in range(8):
+            await pilot.pause()
+        tv = app.screen._active_widget
+        assert tv._full_view is not None
+        assert len(tv._full_view) == 5000
+        assert tv._loaded_count == _PAGE_SIZE
+
+
+@pytest.mark.asyncio
+async def test_table_loads_more_on_demand():
+    """Calling _load_next_page appends the next page."""
+    from textual.app import App
+
+    from ecstacy.core.dataset import DataSet
+    from ecstacy.screens.chart import ChartScreen
+    from ecstacy.widgets.table import _PAGE_SIZE
+
+    df = pd.DataFrame({"a": range(1000), "b": range(1000, 2000)})
+    ds = DataSet.from_dataframe(df, source_id="s", kind="test")
+
+    class _App(App):
+        def on_mount(self):
+            self.push_screen(ChartScreen(ds, "table"))
+
+    app = _App()
+    async with app.run_test() as pilot:
+        for _ in range(8):
+            await pilot.pause()
+        tv = app.screen._active_widget
+        assert tv._loaded_count == _PAGE_SIZE
+        tv._load_next_page()
+        assert tv._loaded_count == _PAGE_SIZE * 2
+        tv._load_next_page()
+        assert tv._loaded_count == _PAGE_SIZE * 3
+
+
+@pytest.mark.asyncio
+async def test_table_export_ignores_pagination():
+    """Export returns the full sorted+filtered frame, not just loaded rows."""
+    from textual.app import App
+
+    from ecstacy.core.dataset import DataSet
+    from ecstacy.screens.chart import ChartScreen
+
+    df = pd.DataFrame({"a": range(5000), "b": range(5000, 10000)})
+    ds = DataSet.from_dataframe(df, source_id="s", kind="test")
+
+    class _App(App):
+        def on_mount(self):
+            self.push_screen(ChartScreen(ds, "table"))
+
+    app = _App()
+    async with app.run_test() as pilot:
+        for _ in range(8):
+            await pilot.pause()
+        tv = app.screen._active_widget
+        assert tv._loaded_count < 5000
+        exported = tv._get_current_view()
+        assert len(exported) == 5000

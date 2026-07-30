@@ -1,6 +1,6 @@
 [project]
 name = "ecstacy-tui"
-version = "0.9.4"
+version = "0.10.0"
 description = "A Textual TUI for beautiful terminal data visualization from files, REST endpoints and more."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -99,5 +99,5 @@ target-version = "py311"
 select = ["E", "F", "I", "W", "UP", "B"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 ignore_missing_imports = true

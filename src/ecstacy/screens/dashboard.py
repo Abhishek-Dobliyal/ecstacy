@@ -204,7 +204,7 @@ class DashboardScreen(Screen):
         except Exception as error:
             self._on_error(source_id)(error)
         finally:
-            await stream.aclose()
+            await stream.aclose()  # type: ignore[attr-defined]
 
     def _parse_refresh_interval(self) -> float:
         if not self.dashboard.refresh:
@@ -314,13 +314,14 @@ class DashboardScreen(Screen):
                     severity="error",
                 )
                 continue
-            widget.set_data(result, _mapping_from_panel(self.dashboard.panels[idx]))
+            widget.set_data(result, _mapping_from_panel(self.dashboard.panels[idx]))  # type: ignore[attr-defined]
 
     async def action_refresh(self) -> None:
         has_poll = self._scheduler is not None and bool(self._jobs)
         has_stream = bool(self._stream_sources)
         if has_poll:
             self.notify("refreshing...")
+            assert self._scheduler is not None
             for job in self._jobs:
                 self._scheduler.run_now(job, force=True)
         elif has_stream:
@@ -358,7 +359,7 @@ class DashboardScreen(Screen):
         self.app.sub_title = ""  # clear any stale single-panel subtitle
         cols, rows = _grid_size(len(self.dashboard.panels))
         grid = Grid(id="dashboard-grid")
-        grid.styles.grid_size = (cols, rows)
+        grid.styles.grid_size = (cols, rows)  # type: ignore[attr-defined]
         await holder.mount(grid)
         for idx, panel in enumerate(self.dashboard.panels):
             container, content = self._prepare_panel_widget(idx, panel)
@@ -399,7 +400,7 @@ class DashboardScreen(Screen):
         transformed = self._build_transformed(panel, dataset, frame)
         self._panel_cache[index] = (id(dataset), transformed)
         mapping = _mapping_from_panel(panel)
-        widget.set_data(transformed, mapping)
+        widget.set_data(transformed, mapping)  # type: ignore[attr-defined]
         return container, widget
 
     def _build_transformed(

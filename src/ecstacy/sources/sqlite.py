@@ -45,7 +45,7 @@ class SqliteSource(Source):
             self._conn.close()
             self._conn = None
 
-    def fetch(self, keep_raw: bool = False) -> DataSet:
+    def fetch(self, keep_raw: bool = False, force: bool = False) -> DataSet:
         conn: sqlite3.Connection | None = None
         owns_connection = False
         try:
