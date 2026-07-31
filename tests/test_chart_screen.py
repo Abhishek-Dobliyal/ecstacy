@@ -536,6 +536,44 @@ def test_column_picker_preserves_unseen_fields():
     assert "y" not in field_names
 
 
+@pytest.mark.asyncio
+async def test_column_picker_routes_correctly_after_modal_resume():
+    """Full user flow regression: table c → esc → chart → c → esc → c.
+    The second c on the chart must open the mapping modal, not the table's
+    column-toggle modal.  On screen resume Textual's auto-focus used to
+    focus the hidden pooled table's DataTable, stealing the binding."""
+    from ecstacy.screens.modals import ChartMappingScreen, ColumnPickerScreen
+
+    app = _make_app()
+    async with app.run_test() as pilot:
+        await _settle(pilot)
+        screen = app.screen
+        # c on the table view -> column-toggle modal
+        await pilot.press("c")
+        await _settle(pilot)
+        assert isinstance(app.screen, ColumnPickerScreen)
+        await pilot.press("escape")
+        await _settle(pilot)
+        # switch to a chart (line)
+        await pilot.press("n")
+        await _settle(pilot)
+        assert screen.names[screen.index] == "line"
+        # c on the chart -> mapping modal
+        await pilot.press("c")
+        await _settle(pilot)
+        assert isinstance(app.screen, ChartMappingScreen)
+        await pilot.press("escape")
+        await _settle(pilot)
+        # the hidden table's DataTable must NOT have stolen focus
+        from textual.widgets import DataTable
+
+        assert not isinstance(screen.focused, DataTable)
+        # c again -> still the mapping modal
+        await pilot.press("c")
+        await _settle(pilot)
+        assert isinstance(app.screen, ChartMappingScreen)
+
+
 def test_viz_no_mapping_set():
     from ecstacy.screens.modals import VIZ_NO_MAPPING
     assert "heatmap" in VIZ_NO_MAPPING

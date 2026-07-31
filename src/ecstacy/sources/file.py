@@ -26,6 +26,7 @@ _READERS = {
     ".txt": "log",
     ".xlsx": "excel",
     ".xls": "excel",
+    ".duckdb": "duckdb",
 }
 
 _STDIN_SENTINEL = "-"
@@ -87,6 +88,8 @@ class FileSource(Source):
         try:
             if self.fmt in _DUCKDB_FORMATS:
                 frame, raw = _read_duckdb(self.path, self.fmt, self.max_rows, keep_raw)
+            elif self.fmt == "duckdb":
+                frame = _read_duckdb_database(self.path, self.max_rows, self.id)
             elif self.fmt == "excel":
                 frame = _read_excel(self.path, self.sheet, self.max_rows)
             elif self.fmt == "log":
@@ -94,7 +97,7 @@ class FileSource(Source):
             else:
                 raise SourceError(
                     f"unknown format {self.fmt!r}; expected one of: "
-                    "csv, tsv, json, ndjson, parquet, excel, log",
+                    "csv, tsv, json, ndjson, parquet, excel, log, duckdb",
                     source_id=self.id,
                 )
         except pd.errors.EmptyDataError as exc:
@@ -189,6 +192,33 @@ def _read_duckdb(
         if keep_raw:
             raw = orjson.loads(path.read_bytes())
     return frame, raw
+
+
+def _read_duckdb_database(
+    path: Path, max_rows: int | None, source_id: str
+) -> pd.DataFrame:
+    """Read a DuckDB *database* file (not a data file parsed by DuckDB).
+
+    A single-table database is read directly; a multi-table one raises a
+    SourceError listing the tables with a hint to use the sql source.
+    """
+    conn = duckdb.connect(str(path), read_only=True)
+    try:
+        tables = [row[0] for row in conn.sql("SHOW TABLES").fetchall()]
+        if not tables:
+            raise SourceError(f"no tables in {path}", source_id=source_id)
+        if len(tables) > 1:
+            shown = ", ".join(tables[:6]) + (", ..." if len(tables) > 6 else "")
+            raise SourceError(
+                f"{path.name} has {len(tables)} tables ({shown}); "
+                f'pick one with: ecstacy sql "select * from <table>" --db {path.name}',
+                source_id=source_id,
+            )
+        limit = f" LIMIT {max_rows}" if max_rows is not None else ""
+        table = tables[0].replace('"', '""')
+        return conn.sql(f'SELECT * FROM "{table}"{limit}').df()
+    finally:
+        conn.close()
 
 
 def _looks_like_envelope(frame: pd.DataFrame) -> bool:

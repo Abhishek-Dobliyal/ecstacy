@@ -111,8 +111,8 @@ class ChartScreen(Screen):
             yield search_bar
             transform_bar = Input(
                 placeholder=(
-                    "ctrl+f to query  ·  where value > 100 | "
-                    "group_by region | agg mean | limit 10"
+                    "ctrl+f to query · join clauses with | (any source, not SQL)  ·  "
+                    "where value > 100 | group_by region | agg mean | limit 10"
                 ),
                 id="transform-bar",
             )
@@ -370,6 +370,14 @@ class ChartScreen(Screen):
         search_bar.display = is_table
         transform_bar.display = is_table
         self._update_table_bindings(is_table)
+        # Keep the pooled table's DataTable out of the focus chain while it
+        # is hidden.  On screen resume Textual's auto-focus (AUTO_FOCUS="*")
+        # ignores display:none and would focus it, routing keys like "c" to
+        # the table's bindings while a chart is shown.
+        pooled_table = self._viz_pool.get("table")
+        if pooled_table is not None:
+            for data_table in pooled_table.query(DataTable):
+                data_table.can_focus = is_table
         if is_table:
             search_bar.value = widget._search_value  # type: ignore[attr-defined]
         else:

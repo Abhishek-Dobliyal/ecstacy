@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-07-31
+
+### Added
+- The file source now reads `.duckdb` database files directly (or via
+  `--format duckdb`): a single-table database is read as-is, and a
+  multi-table one fails with a clear error listing the tables plus an
+  `ecstacy sql "select * from <table>" --db <file>` hint — instead of the
+  cryptic DuckDB CSV-sniffer error the unknown extension previously fell
+  into.
+- Typing raw SQL (`select ... from ...`) into the transform bar now
+  returns a friendly "uses a pipe DSL, not SQL" error with an example;
+  the bar's placeholder also clarifies the query DSL works on any source
+  and is not SQL, and shows that clauses join with `|`.
+- `where` clause errors now explain the two common pandas-query mistakes
+  instead of cryptic messages: a lone `=` gets "use == to compare"
+  (pandas said "cannot assign without a target object"), and an unquoted
+  string gets "quote string values, e.g. region == 'US'".  String values
+  containing `=` (e.g. `'u=s'`) don't false-trigger the check.
+
+### Fixed
+- Pressing `c` on a chart after closing the column-mapping modal opened
+  the table's column-toggle modal instead of the mapping modal.  On
+  screen resume, Textual's auto-focus (`AUTO_FOCUS="*"`) ignores
+  `display: none` and focused the hidden pooled table's `DataTable`,
+  stealing the key binding.  The pooled table's `DataTable` now leaves
+  the focus chain (`can_focus=False`) whenever it is hidden.
+
 ## [0.10.9] - 2026-07-31
 
 ### Changed

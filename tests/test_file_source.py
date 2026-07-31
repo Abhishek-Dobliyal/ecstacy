@@ -273,6 +273,65 @@ def test_file_source_duckdb_max_rows_limit_pushdown(sample_csv):
     assert dataset.meta.rows == 2
 
 
+def _write_duckdb(path, tables: dict[str, str]) -> None:
+    import duckdb
+
+    conn = duckdb.connect(str(path))
+    try:
+        for name, sql in tables.items():
+            conn.sql(f"CREATE TABLE {name} AS {sql}")
+    finally:
+        conn.close()
+
+
+def test_file_source_reads_single_table_duckdb_database(tmp_path):
+    """A .duckdb database with one table is read directly — no CSV sniffer."""
+    db = tmp_path / "sample_5k.duckdb"
+    _write_duckdb(
+        db,
+        {"metrics": "SELECT range AS id, 'us' AS region, range * 1.5 AS value FROM range(20)"},
+    )
+    spec = SourceSpec(kind="file", id="db", params={"path": str(db)})
+    dataset = create_source(spec).fetch()
+    assert dataset.meta.rows == 20
+    assert list(dataset.frame.columns) == ["id", "region", "value"]
+
+
+def test_file_source_duckdb_database_max_rows(tmp_path):
+    db = tmp_path / "sample_5k.duckdb"
+    _write_duckdb(db, {"metrics": "SELECT range AS id FROM range(100)"})
+    spec = SourceSpec(kind="file", id="db", params={"path": str(db), "max_rows": 5})
+    dataset = create_source(spec).fetch()
+    assert dataset.meta.rows == 5
+
+
+def test_file_source_duckdb_multi_table_errors_with_hint(tmp_path):
+    """Multi-table databases get a clear error, not a CSV sniffer crash."""
+    db = tmp_path / "multi.duckdb"
+    _write_duckdb(
+        db,
+        {
+            "metrics": "SELECT 1 AS a",
+            "events": "SELECT 2 AS b",
+        },
+    )
+    spec = SourceSpec(kind="file", id="db", params={"path": str(db)})
+    with pytest.raises(SourceError) as excinfo:
+        create_source(spec).fetch()
+    message = excinfo.value.message
+    assert "metrics" in message and "events" in message
+    assert "ecstacy sql" in message and "--db" in message
+    assert "sniff" not in message.lower()
+
+
+def test_file_source_duckdb_empty_database_errors(tmp_path):
+    db = tmp_path / "empty.duckdb"
+    _write_duckdb(db, {})
+    spec = SourceSpec(kind="file", id="db", params={"path": str(db)})
+    with pytest.raises(SourceError, match="no tables"):
+        create_source(spec).fetch()
+
+
 def test_file_source_keep_raw_false_for_csv(sample_csv):
     """Non-JSON formats never carry raw; keep_raw has no effect."""
     spec = SourceSpec(kind="file", id="sample", params={"path": str(sample_csv)})

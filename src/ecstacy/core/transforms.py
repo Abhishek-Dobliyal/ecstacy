@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -26,6 +27,25 @@ def _validate_transform_inputs(frame: pd.DataFrame, transform: Transform) -> Non
             raise TransformError(f"time_column not found: {transform.time_column}")
 
 
+def _validate_where_clause(clause: str) -> None:
+    """Fail fast on a lone ``=`` outside quotes; pandas query only takes ``==``."""
+    unquoted = re.sub(r"'[^']*'|\"[^\"]*\"", "", clause)
+    if re.search(r"(?<![<>=!])=(?!=)", unquoted):
+        raise TransformError(
+            f"invalid where clause {clause!r}: use == to compare, "
+            "and quote string values — e.g. region == 'US'"
+        )
+
+
+def _where_error(clause: str, exc: Exception) -> TransformError:
+    """Enrich pandas query errors with hints for the common mistakes."""
+    msg = f"invalid where clause {clause!r}: {exc}"
+    match = re.search(r"name '([^']+)' is not defined", str(exc))
+    if match:
+        msg += f" — quote string values, e.g. region == '{match.group(1)}'"
+    return TransformError(msg)
+
+
 @dataclass
 class Transform:
     select: list[str] | None = None
@@ -40,12 +60,11 @@ class Transform:
         _validate_transform_inputs(frame, self)
         result = frame
         if self.where:
+            _validate_where_clause(self.where)
             try:
                 result = result.query(self.where)
             except Exception as exc:
-                raise TransformError(
-                    f"invalid where clause {self.where!r}: {exc}"
-                ) from exc
+                raise _where_error(self.where, exc) from exc
         if self.resample and self.time_column:
             result = _resample(result, self.time_column, self.resample, self.agg)
         elif self.group_by:
@@ -91,6 +110,11 @@ def parse_transform_query(text: str) -> Transform:
 
     Example: "where value > 100 | group_by region | agg mean | limit 10"
     """
+    if re.match(r"(?i)^\s*(select|with)\b", text) and re.search(r"(?i)\bfrom\b", text):
+        raise TransformError(
+            "the query bar uses a pipe DSL, not SQL — join clauses with |, "
+            "example: where value > 100 | group_by region | agg mean | limit 10"
+        )
     parts: dict[str, Any] = {}
     for segment in text.replace("\n", "|").split("|"):
         segment = segment.strip()
