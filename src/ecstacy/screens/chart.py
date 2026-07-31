@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
@@ -223,21 +222,16 @@ class ChartScreen(Screen):
         )
 
     async def _consume_stream(self, source: Source, keep_raw: bool = False) -> None:
-        def _on_status(msg: str) -> None:
-            if self.is_attached:
-                self.app.call_from_thread(self.notify, msg, severity="warning")
+        from ecstacy.core.stream import consume_stream
 
-        stream = source.stream(keep_raw=keep_raw, on_status=_on_status)
-        try:
-            async for dataset in stream:
-                self._on_refresh_data(dataset)
-        except asyncio.CancelledError:
-            raise
-        except Exception as error:
-            self._on_refresh_error(error)
-        finally:
-            await stream.aclose()  # type: ignore[attr-defined]
-            self._stream_worker = None
+        await consume_stream(
+            source=source,
+            screen=self,
+            on_data=self._on_refresh_data,
+            on_error=self._on_refresh_error,
+            keep_raw=keep_raw,
+            on_done=lambda: setattr(self, "_stream_worker", None),
+        )
 
     def _on_refresh_data(self, dataset: DataSet) -> None:
         if not self.is_attached:

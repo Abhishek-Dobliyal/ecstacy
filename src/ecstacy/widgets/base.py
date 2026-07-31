@@ -3,6 +3,7 @@ from __future__ import annotations
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 import pandas as pd
 from rich.text import Text
@@ -10,6 +11,9 @@ from textual.app import RenderResult
 from textual_plotext import PlotextPlot
 
 from ecstacy.core.dataset import DataSet
+
+if TYPE_CHECKING:
+    from textual.worker import Worker
 
 _BUDGET_FALLBACK = 1000
 _BUDGET_CAP = 2000
@@ -85,7 +89,7 @@ class PlotWidget(PlotextPlot):
         self._auto_mapping_key: tuple | None = None
         self._on_note: Callable[[str | None], None] | None = None
         self._last_note: str | None = None
-        self._worker: object | None = None
+        self._worker: Worker | None = None
 
     # public API
 

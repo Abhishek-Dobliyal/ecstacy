@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 
 from ecstacy.core import registry
 from ecstacy.widgets.base import ColumnMapping, PlotWidget, numeric
-from ecstacy.widgets.charts import _hex_rgb
+from ecstacy.widgets.charts._helpers import _hex_rgb
 
 _MAX_POINTS = 500
 

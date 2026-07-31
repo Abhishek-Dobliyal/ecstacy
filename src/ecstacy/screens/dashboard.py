@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import math
 from typing import TYPE_CHECKING
 
@@ -190,23 +189,16 @@ class DashboardScreen(Screen):
     async def _consume_stream(
         self, source: Source, source_id: str, keep_raw: bool = False
     ) -> None:
-        def _on_status(msg: str) -> None:
-            if self.is_attached:
-                self.app.call_from_thread(self.notify, msg, severity="warning")
+        from ecstacy.core.stream import consume_stream
 
-        stream = source.stream(keep_raw=keep_raw, on_status=_on_status)
-        try:
-            async for dataset in stream:
-                # Skip updates when a modal is on top.
-                if self.app.screen is not self:
-                    continue
-                self._on_data(source_id)(dataset)
-        except asyncio.CancelledError:
-            raise
-        except Exception as error:
-            self._on_error(source_id)(error)
-        finally:
-            await stream.aclose()  # type: ignore[attr-defined]
+        await consume_stream(
+            source=source,
+            screen=self,
+            on_data=self._on_data(source_id),
+            on_error=self._on_error(source_id),
+            keep_raw=keep_raw,
+            is_active=lambda: self.app.screen is self,
+        )
 
     def _parse_refresh_interval(self) -> float:
         if not self.dashboard.refresh:

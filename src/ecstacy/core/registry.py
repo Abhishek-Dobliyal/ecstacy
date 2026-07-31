@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Generic, TypeVar
+from typing import TYPE_CHECKING, Generic, TypeVar
+
+if TYPE_CHECKING:
+    from textual.widget import Widget
+
+    from ecstacy.sources.base import Source
 
 T = TypeVar("T")
 
@@ -30,5 +35,5 @@ class Registry(Generic[T]):
         return sorted(self._items)
 
 
-sources: Registry = Registry("source")
-viz: Registry = Registry("viz")
+sources: Registry[type[Source]] = Registry("source")  # type: ignore[valid-type]
+viz: Registry[type[Widget]] = Registry("viz")  # type: ignore[valid-type]

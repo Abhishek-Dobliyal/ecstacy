@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.1] - 2026-07-31
+
+### Changed
+- Split `cli.py` into `cli/` package (`commands.py`, `headless.py`, `_options.py`).
+- Split `modals.py` into `screens/modals/` package (`open.py`, `column_picker.py`, `export.py`, `chart_mapping.py`).
+- Split `charts.py` into `widgets/charts/` package with per-chart files, shared `_helpers.py` and `_payloads.py`.
+- Deduplicated WebSocket stream consumers in `ChartScreen` and `DashboardScreen` into `core/stream.py`.
+
+### Fixed
+- `Registry` module-level instances now carry `type[Source]` / `type[Widget]` type annotations.
+- `PlotWidget._worker` typed as `Worker | None` instead of `object`.
+
 ## [0.11.0] - 2026-07-31
 
 ### Added
