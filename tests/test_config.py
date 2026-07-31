@@ -125,3 +125,60 @@ def test_version_matches_package_metadata():
     from ecstacy import __version__
 
     assert __version__ == pkg_version("ecstacy-tui")
+
+
+def test_env_overrides_theme(monkeypatch, tmp_path):
+    monkeypatch.setenv("ECSTACY_THEME", "ecstacy-light")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    config = load_app_config()
+    assert config.theme == "ecstacy-light"
+
+
+def test_env_overrides_splash(monkeypatch, tmp_path):
+    monkeypatch.setenv("ECSTACY_SPLASH", "false")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    config = load_app_config()
+    assert config.splash is False
+
+
+def test_env_overrides_max_rows(monkeypatch, tmp_path):
+    monkeypatch.setenv("ECSTACY_MAX_ROWS", "500")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    config = load_app_config()
+    assert config.max_rows == 500
+
+
+def test_cli_overrides_take_precedence_over_env(monkeypatch, tmp_path):
+    monkeypatch.setenv("ECSTACY_THEME", "ecstacy-light")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    config = load_app_config({"theme": "ecstacy-dark"})
+    assert config.theme == "ecstacy-dark"
+
+
+def test_project_config_takes_precedence_over_user(monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    user_yaml = tmp_path / "ecstacy" / "config.yaml"
+    user_yaml.parent.mkdir(parents=True)
+    user_yaml.write_text("theme: ecstacy-dark\n")
+    project_yaml = tmp_path / "ecstacy.yaml"
+    project_yaml.write_text("theme: ecstacy-light\n")
+    monkeypatch.chdir(tmp_path)
+    config = load_app_config()
+    assert config.theme == "ecstacy-light"
+
+
+def test_env_overrides_project_config(monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    monkeypatch.setenv("ECSTACY_THEME", "ecstacy-light")
+    project_yaml = tmp_path / "ecstacy.yaml"
+    project_yaml.write_text("theme: ecstacy-dark\n")
+    monkeypatch.chdir(tmp_path)
+    config = load_app_config()
+    assert config.theme == "ecstacy-light"
+
+
+def test_missing_project_config_is_not_an_error(monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+    config = load_app_config()
+    assert config.theme == "ecstacy-dark"

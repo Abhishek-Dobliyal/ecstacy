@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.3] - 2026-07-31
+
+### Added
+- `pytest-cov` coverage tooling with `--cov=src/ecstacy` in CI.
+- Integration/E2E tests: file open, viz cycle, search bar visibility, export modal dismiss, full viz loop.
+- Dashboard stress test: 6-panel grid with concurrent data delivery.
+- Config layering tests: env var overrides, project config precedence, CLI flag priority.
+- Transform DSL edge-case tests: lone `=`, quoted strings with `=`, empty clauses, malformed limit, SQL detection, unknown keywords, resample+time, trailing/leading pipes.
+- Scheduled benchmark CI workflow (weekly Monday cron + manual dispatch).
+
 ## [0.11.2] - 2026-07-31
 
 ### Added

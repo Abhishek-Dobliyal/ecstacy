@@ -27,7 +27,7 @@ jobs:
         run: uv sync --extra dev
 
       - name: Run tests
-        run: uv run pytest -q
+        run: uv run pytest -q --cov-report=html
 
       - name: Run ruff
         run: uv run ruff check .

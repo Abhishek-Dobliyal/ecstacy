@@ -142,3 +142,70 @@ def test_parse_transform_query_applies_to_frame(sample_frame):
     result = t.apply(sample_frame)
     assert len(result) == 1
     assert result.iloc[0]["region"] == "eu"
+
+
+def test_parse_transform_query_empty_clauses_skipped():
+    t = parse_transform_query("where x > 1 || group_by y")
+    assert t.where == "x > 1"
+    assert t.group_by == ["y"]
+
+
+def test_parse_transform_query_only_pipe_separators():
+    t = parse_transform_query("|where x > 1||group_by y|")
+    assert t.where == "x > 1"
+    assert t.group_by == ["y"]
+
+
+def test_parse_transform_query_lone_equals_in_unquoted_value():
+    import pandas as pd
+
+    t = parse_transform_query("where x = 5")
+    with pytest.raises(TransformError, match="use == to compare"):
+        t.apply(pd.DataFrame({"x": [1, 2, 3]}))
+
+
+def test_parse_transform_query_equals_in_quoted_string_ok():
+    import pandas as pd
+
+    t = parse_transform_query("where x == 'y=z'")
+    assert t.where == "x == 'y=z'"
+    result = t.apply(pd.DataFrame({"x": ["y=z", "other"], "val": [1, 2]}))
+    assert len(result) == 1
+
+
+def test_parse_transform_query_malformed_limit_fails():
+    with pytest.raises(TransformError, match="invalid limit"):
+        parse_transform_query("limit abc")
+
+
+def test_parse_transform_query_sql_looking_input_fails():
+    with pytest.raises(TransformError, match="not SQL"):
+        parse_transform_query("select a, b from c")
+    with pytest.raises(TransformError, match="not SQL"):
+        parse_transform_query("SELECT * FROM x WHERE a > 1")
+
+
+def test_parse_transform_query_unknown_keyword_ignored():
+    t = parse_transform_query("where x > 1 | unknown_clause y | limit 5")
+    assert t.where == "x > 1"
+    assert t.limit == 5
+
+
+def test_parse_transform_query_resample_and_time():
+    t = parse_transform_query("resample D | time date | agg mean")
+    assert t.resample == "D"
+    assert t.time_column == "date"
+    assert t.agg == "mean"
+
+
+def test_parse_transform_query_select_with_spaces():
+    t = parse_transform_query("select region ,  value  , count")
+    assert t.select == ["region", "value", "count"]
+
+
+def test_transform_limit_zero_returns_empty():
+    import pandas as pd
+
+    frame = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    result = Transform(limit=0).apply(frame)
+    assert len(result) == 0

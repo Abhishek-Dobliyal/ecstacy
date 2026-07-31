@@ -373,3 +373,36 @@ async def test_single_panel_placeholder_replaced_once_data_arrives():
         await _settle(pilot)
         assert 1 in screen._panel_widgets
         assert len(screen._panel_widgets[1]._frame) == 3
+
+
+@pytest.mark.asyncio
+async def test_multi_panel_six_panels_all_receive_data():
+    from textual.app import App
+
+    from ecstacy.screens.dashboard import DashboardScreen
+
+    panel_sources = ["a", "b", "c", "d", "e", "f"]
+    dashboard = DashboardConfig(
+        sources=[
+            SourceSpec(kind="file", id=src, params={"path": f"{src}.csv"})
+            for src in panel_sources
+        ],
+        panels=[PanelConfig(viz="table", source=src) for src in panel_sources],
+    )
+
+    class _App(App):
+        def on_mount(self):
+            self.push_screen(DashboardScreen(dashboard))
+
+    app = _App()
+    async with app.run_test() as pilot:
+        screen = app.screen
+        for src in panel_sources:
+            screen._on_data(src)(_frame_dataset(3, source_id=src))
+        await app.workers.wait_for_complete()
+        await _settle(pilot)
+        assert screen._panels_built
+        assert len(screen._panel_widgets) == 6
+        for i in range(6):
+            widget = screen._panel_widgets[i]
+            assert len(widget._frame) == 3

@@ -1,6 +1,6 @@
 [project]
 name = "ecstacy-tui"
-version = "0.11.2"
+version = "0.11.3"
 description = "A Textual TUI for beautiful terminal data visualization from files, REST endpoints and more."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -72,6 +72,7 @@ dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.24.0",
     "pytest-benchmark>=4.0.0",
+    "pytest-cov>=6.0.0",
     "textual-dev>=1.5.1",
     "ruff>=0.5.0",
     "mypy>=1.10.0",
@@ -87,9 +88,16 @@ packages = ["src/ecstacy"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+addopts = "--cov=src/ecstacy --cov-report=term-missing"
 markers = [
     "bench: performance budgets (opt-in via --benchmark-only or -m bench)",
 ]
+
+[tool.coverage.run]
+source = ["src/ecstacy"]
+
+[tool.coverage.paths]
+source = ["src/ecstacy"]
 
 [tool.ruff]
 line-length = 100
