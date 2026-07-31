@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 import time
 from typing import Any
 
@@ -37,8 +38,8 @@ class RestSource(Source):
         self.max_rows = max_rows
         self._ttl = ttl
         self._cache: tuple[float, DataSet] | None = None
-        # built eagerly: lazy init races when fetches overlap on pool threads
-        self._client: httpx.Client | None = httpx.Client(timeout=self.timeout)
+        self._client: httpx.Client | None = None
+        self._client_lock = threading.Lock()
 
     def describe(self) -> str:
         return f"rest:{self.url}"
@@ -57,7 +58,9 @@ class RestSource(Source):
                 if cached.meta.raw is not None or not keep_raw:
                     return cached
         if self._client is None:
-            self._client = httpx.Client(timeout=self.timeout)
+            with self._client_lock:
+                if self._client is None:
+                    self._client = httpx.Client(timeout=self.timeout)
         try:
             response = self._client.request(
                 self.method, self.url, headers=self.headers, params=self.query

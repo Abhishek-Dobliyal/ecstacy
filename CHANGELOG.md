@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.2] - 2026-07-31
+
+### Added
+- `Registry.reset()` and `Registry.isolated()` context manager for test isolation.
+- `.pre-commit-config.yaml` with ruff and mypy hooks.
+
+### Fixed
+- `RestSource` httpx client is now created lazily with double-checked locking instead of eagerly in `__init__`, avoiding connection attempts at source construction time.
+- `ChartScreen` now closes file-backed SQL sources (`close()`) on unmount, matching `DashboardScreen` behaviour.
+- Dashboard panel `border_subtitle` updates are guarded against redundant assignments to avoid unnecessary CSS cascade triggers.
+
 ## [0.11.1] - 2026-07-31
 
 ### Changed

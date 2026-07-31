@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+import contextlib
+from collections.abc import Callable, Generator
 from typing import TYPE_CHECKING, Generic, TypeVar
 
 if TYPE_CHECKING:
@@ -33,6 +34,18 @@ class Registry(Generic[T]):
 
     def names(self) -> list[str]:
         return sorted(self._items)
+
+    def reset(self) -> None:
+        self._items.clear()
+
+    @contextlib.contextmanager
+    def isolated(self) -> Generator[None, None, None]:
+        saved = dict(self._items)
+        self._items = {}
+        try:
+            yield
+        finally:
+            self._items = saved
 
 
 sources: Registry[type[Source]] = Registry("source")  # type: ignore[valid-type]

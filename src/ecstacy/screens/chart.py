@@ -79,6 +79,7 @@ class ChartScreen(Screen):
         self.index = self.names.index(resolved) if resolved in self.names else 0
         self._scheduler: Scheduler | None = None
         self._job: Job | None = None
+        self._source: Source | None = None
         self._stream_worker: Worker | None = None
         self._transform_query = ""
         self._transform_cache: DataSet | None = None
@@ -184,6 +185,11 @@ class ChartScreen(Screen):
         if self._scheduler is not None:
             self._scheduler.stop()
             self._scheduler = None
+        if self._source is not None:
+            close = getattr(self._source, "close", None)
+            if callable(close):
+                close()
+            self._source = None
         self._job = None
 
     def _start_refresh(self) -> None:
@@ -197,6 +203,7 @@ class ChartScreen(Screen):
         except SourceError as error:
             self.notify(f"refresh unavailable: {error.message}", severity="warning")
             return
+        self._source = source
         if getattr(source, "is_stdin", False):
             return  # re-reading stdin would hit EOF or block on a live pipe
         keep_raw = resolve_viz(self.names[self.index]) == "json"

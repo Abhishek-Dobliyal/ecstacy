@@ -448,7 +448,10 @@ class DashboardScreen(Screen):
         if hasattr(widget, "set_on_note"):
             def _on_note(note: str | None) -> None:
                 if container.is_attached:
-                    container.border_subtitle = note or ""
+                    value = note or ""
+                    if value != getattr(container, "_last_subtitle", None):
+                        container._last_subtitle = value  # type: ignore[attr-defined]
+                        container.border_subtitle = value
             widget.set_on_note(_on_note)
         widget.set_data(transformed, mapping)  # type: ignore[attr-defined]
         self._panel_widget_data[index] = id(dataset)
