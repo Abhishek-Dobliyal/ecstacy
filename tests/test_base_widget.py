@@ -104,9 +104,8 @@ async def test_theme_change_repaints_without_reprepare():
         assert _prepare_calls == 1
         assert _paint_calls == 1
         # theme change → re-paint only, no re-prepare
-        widget._on_theme_changed(None)
-        for _ in range(4):
-            await pilot.pause()
+        app.theme = "textual-light"
+        await _settle(app, pilot)
         assert _prepare_calls == 1
         assert _paint_calls == 2
 
@@ -187,6 +186,98 @@ async def test_render_caches_built_plot_until_next_paint():
         widget.set_data(_dataset())
         await _settle(app, pilot)
         assert builds == 1
+
+
+@pytest.mark.asyncio
+async def test_build_runs_off_ui_thread():
+    """plotext's rasterizer (build()) must never run on the UI thread —
+    it blocks the event loop for ~100ms+ per call at typical sizes."""
+    import threading as _threading
+
+    from textual.app import App
+
+    class _App(App):
+        def compose(self):
+            yield CountingPlot()
+
+    app = _App()
+    async with app.run_test() as pilot:
+        widget = app.query_one(CountingPlot)
+        main_ident = _threading.get_ident()
+        build_threads: set[int] = set()
+        real_build = widget._plot.build
+
+        def tracking_build():
+            build_threads.add(_threading.get_ident())
+            return real_build()
+
+        widget._plot.build = tracking_build
+        widget.set_data(_dataset())
+        await _settle(app, pilot)
+        widget.set_data(_dataset())  # new object → full pipeline again
+        await _settle(app, pilot)
+        assert build_threads, "expected at least one build"
+        assert main_ident not in build_threads
+
+
+@pytest.mark.asyncio
+async def test_resize_repaints_from_cached_payload():
+    """A size change re-paints + rebuilds from the cached payload without
+    re-running _prepare."""
+    global _prepare_calls, _paint_calls
+    _prepare_calls = 0
+    _paint_calls = 0
+    from textual.app import App
+
+    class _App(App):
+        def compose(self):
+            yield CountingPlot()
+
+    app = _App()
+    async with app.run_test() as pilot:
+        widget = app.query_one(CountingPlot)
+        widget.set_data(_dataset())
+        await _settle(app, pilot)
+        assert _prepare_calls == 1
+        assert _paint_calls == 1
+        # Shrink the widget — layout gives it a new size → rebuild only.
+        widget.styles.width = 40
+        await _settle(app, pilot)
+        assert widget.size.width <= 40
+        assert _prepare_calls == 1
+        assert _paint_calls == 2
+        assert widget._build_cache is not None
+
+
+@pytest.mark.asyncio
+async def test_theme_change_skipped_while_hidden():
+    """Hidden pooled widgets don't re-paint on theme change; they rebuild
+    lazily when shown again."""
+    global _prepare_calls, _paint_calls
+    _prepare_calls = 0
+    _paint_calls = 0
+    from textual.app import App
+
+    class _App(App):
+        def compose(self):
+            yield CountingPlot()
+
+    app = _App()
+    async with app.run_test() as pilot:
+        widget = app.query_one(CountingPlot)
+        widget.set_data(_dataset())
+        await _settle(app, pilot)
+        assert _paint_calls == 1
+        widget.display = False
+        for _ in range(4):
+            await pilot.pause()
+        app.theme = "textual-light"
+        await _settle(app, pilot)
+        assert _paint_calls == 1  # hidden → no work
+        widget.display = True
+        await _settle(app, pilot)
+        assert _paint_calls == 2  # shown → lazily re-painted
+        assert _prepare_calls == 1
 
 
 @pytest.mark.asyncio

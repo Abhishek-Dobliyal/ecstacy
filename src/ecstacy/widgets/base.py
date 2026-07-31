@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
@@ -47,22 +48,22 @@ def auto_mapping(dataset: DataSet, viz_name: str) -> ColumnMapping:
 class PlotWidget(PlotextPlot):
     """Base class for plotext-backed visualizations.
 
-    Rendering is split into two phases:
+    Rendering happens entirely on a worker thread:
 
-    * ``_prepare`` — pure pandas/numpy work (downsample, groupby, dropna).
-      Runs on a worker thread so the UI stays responsive on large frames.
-    * ``_paint`` — plotext calls using the prepared payload + current theme.
-      Runs on the UI thread.
+    * ``_prepare`` — pure pandas/numpy work (downsample, groupby, dropna);
+      skipped when ``(dataset identity, mapping, budget)`` is unchanged.
+    * ``_paint`` + plotext ``build()`` + ``Text.from_ansi`` — the expensive
+      rasterization (~100ms+ at typical terminal sizes).  Also off-thread;
+      the worker delivers a ready-made ``Text`` and the UI thread just
+      swaps it in.  ``render()`` never touches the plotext figure, so the
+      UI never blocks on rasterization.
 
-    A render-data cache keyed on ``(dataset identity, mapping, budget)``
-    ensures theme toggles only re-paint (colors) without recomputing the
-    series.  A generation counter discards stale worker results.
-
-    ``render()`` caches the built ``Text`` keyed on
-    ``(size, paint generation, theme)`` so unrelated repaints (focus
-    changes, border-title updates, display toggles) don't re-run plotext's
-    expensive rasterizer.  Only a real paint, resize, or theme change
-    rebuilds the plot.
+    While a rebuild is in flight ``render()`` keeps returning the previous
+    (stale) build — no blank flicker.  A ``(size, theme)`` keyed cache
+    makes unrelated repaints (focus, borders, display toggles) free; a
+    resize or theme change re-paints from the cached payload without
+    re-running ``_prepare``.  A generation counter plus a lock around
+    figure access discard stale/cancelled worker results.
     """
 
     viz_name = "plot"
@@ -74,11 +75,12 @@ class PlotWidget(PlotextPlot):
         self._render_data: object | None = None
         self._render_key: tuple | None = None
         self._render_gen = 0
-        self._render_size: tuple[int, int] | None = None
         self._paint_gen = 0
         self._needs_redraw = False
         self._build_cache: Text | None = None
         self._build_cache_key: tuple | None = None
+        self._build_in_flight: tuple[tuple, tuple | None, bool] | None = None
+        self._paint_lock = threading.Lock()
         self._auto_mapping_cache: ColumnMapping | None = None
         self._auto_mapping_key: tuple | None = None
         self._on_note: Callable[[str | None], None] | None = None
@@ -140,11 +142,19 @@ class PlotWidget(PlotextPlot):
             self._budget(),
         )
 
+    def _theme_name(self) -> str:
+        return self._get_plotext_theme_name(self.app.theme)
+
     def _on_theme_changed(self, _theme) -> None:
-        if self._render_data is not None:
-            self._paint_from_cache()
+        if not self.display:
+            # Hidden pooled widget — re-painted lazily on show (the theme
+            # name is part of the build cache key).
+            return
+        if self.is_mounted:
+            self._ensure_build()
 
     def redraw(self) -> None:
+        """Dispatch a prepare+paint+build worker (UI thread, dispatch only)."""
         if self._dataset is None or self._mapping is None:
             self._needs_redraw = False
             return
@@ -158,21 +168,76 @@ class PlotWidget(PlotextPlot):
         self._needs_redraw = False
         key = self._content_key()
         if key == self._render_key and self._render_data is not None:
+            # Data unchanged — the cached build may still be stale
+            # (resize/theme change); rebuild from the cached payload.
+            self._ensure_build()
             return
         self._render_key = key
+        self._dispatch(do_prepare=True)
+
+    def _ensure_build(self) -> None:
+        """Re-paint + rebuild from the cached payload when size/theme moved."""
+        if self._render_data is None and self._build_in_flight is None:
+            return
+        target = (self.size.width, self.size.height, self._theme_name())
+        if target == self._build_cache_key and self._build_cache is not None:
+            return  # cached build is current
+        in_flight = self._build_in_flight
+        if in_flight is not None:
+            f_target, f_content_key, f_prepare = in_flight
+            if f_target == target:
+                return  # this exact build is already on its way
+            if f_prepare and f_content_key == self._render_key:
+                # Fresh data is inbound; let it land first — render() will
+                # request a rebuild for the new size/theme afterwards.
+                return
+        self._dispatch(do_prepare=False)
+
+    def _dispatch(self, do_prepare: bool) -> None:
+        assert self._dataset is not None and self._mapping is not None
         self._render_gen += 1
         gen = self._render_gen
         frame = self._dataset.frame
         mapping = self._mapping
         budget = self._budget()
+        size = (self.size.width, self.size.height)
+        theme = self.app.current_theme
+        theme_name = self._theme_name()
+        payload = self._render_data  # reused when do_prepare is False
+        self._build_in_flight = ((*size, theme_name), self._render_key, do_prepare)
 
         def _work() -> None:
-            payload = self._prepare(frame, mapping, budget)
-            worker = self._worker
-            if worker is not None and getattr(worker, "is_cancelled", False):
-                return
+            nonlocal payload
             try:
-                self.app.call_from_thread(self._deliver, gen, payload)
+                if do_prepare:
+                    payload = self._prepare(frame, mapping, budget)
+                # Read the worker ref AFTER _prepare so the assignment in
+                # _dispatch has landed (it races with the thread start).
+                worker = self._worker
+                # Serialize figure access: a superseded worker's in-flight
+                # build cannot be interrupted, so the gen check must happen
+                # after the lock is acquired (never before painting).
+                with self._paint_lock:
+                    if gen != self._render_gen or (
+                        worker is not None and getattr(worker, "is_cancelled", False)
+                    ):
+                        return
+                    plt = self._plot
+                    plt.clear_figure()
+                    plt.plotsize(*size)
+                    plt._set_size(*size)
+                    plt.theme(theme_name)
+                    try:
+                        self._paint(plt, payload, theme)
+                    except Exception as error:
+                        plt.title(f"cannot render: {error}")
+                    text = Text.from_ansi(plt.build())
+            except Exception:
+                return  # keep the previous build on screen
+            try:
+                self.app.call_from_thread(
+                    self._deliver, gen, payload, text, (*size, theme_name)
+                )
             except RuntimeError:
                 pass
 
@@ -180,29 +245,20 @@ class PlotWidget(PlotextPlot):
             _work, thread=True, exclusive=True, exit_on_error=False
         )
 
-    def _deliver(self, gen: int, payload: object) -> None:
+    def _deliver(self, gen: int, payload: object, text: Text, target: tuple) -> None:
         if gen != self._render_gen or not self.is_mounted:
             return
         self._worker = None
+        self._build_in_flight = None
         self._render_data = payload
         note = getattr(payload, "note", None)
         if note != self._last_note:
             self._last_note = note
             if self._on_note is not None:
                 self._on_note(note)
-        self._paint_from_cache()
-
-    def _paint_from_cache(self) -> None:
-        if self._render_data is None:
-            return
-        self._paint_gen += 1  # invalidate the built-renderable cache
-        plt = self.plt
-        plt.clear_figure()
-        self._render_size = None
-        try:
-            self._paint(plt, self._render_data, self.app.current_theme)
-        except Exception as error:
-            plt.title(f"cannot render: {error}")
+        self._paint_gen += 1
+        self._build_cache = text
+        self._build_cache_key = target
         self.refresh()
 
     # Textual render hook
@@ -211,21 +267,17 @@ class PlotWidget(PlotextPlot):
         if self._needs_redraw:
             # Consume a redraw deferred while the widget had no size; at a
             # real width this either early-returns (cache hit) or dispatches
-            # the prepare worker, whose delivery refreshes us again.
+            # the worker, whose delivery refreshes us again.
             self.redraw()
-        w, h = self.size.width, self.size.height
-        key = (w, h, self._paint_gen, self.app.theme)
+        elif self._render_data is not None:
+            self._ensure_build()
+        key = (self.size.width, self.size.height, self._theme_name())
         if key == self._build_cache_key and self._build_cache is not None:
             return self._build_cache
-        if self._render_size != (w, h):
-            self._plot.plotsize(w, h)
-            self._plot._set_size(w, h)
-            self._render_size = (w, h)
-        self._plot.theme(self._get_plotext_theme_name(self.app.theme))
-        text = Text.from_ansi(self._plot.build())
-        self._build_cache = text
-        self._build_cache_key = key
-        return text
+        # Nothing current to show yet — return the stale build (Textual
+        # crops/pads it for a frame) or blank on first mount.  The worker
+        # dispatched above refreshes us with the fresh build when done.
+        return self._build_cache if self._build_cache is not None else Text("")
 
     # subclass hooks
 

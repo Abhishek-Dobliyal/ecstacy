@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.9] - 2026-07-31
+
+### Changed
+- `PlotWidget` moved all plotext work onto the worker thread: after
+  `_prepare`, the same worker paints, rasterizes (`build()`), and
+  ANSI-parses, delivering a ready-made `Text` that the UI thread simply
+  swaps in. `render()` never touches the plotext figure, so the ~75–200ms
+  rasterization on first chart visits, repaints, resizes, and theme
+  toggles no longer blocks the event loop. While a rebuild is in flight
+  the previous build stays on screen (no blank flicker); a `(size,
+  theme)` keyed build cache keeps revisits at zero rebuilds. A lock
+  around figure access plus the generation counter discards stale or
+  superseded worker results.
+- Resize re-paints from the cached payload (no `_prepare` re-run),
+  dispatched lazily from `render()` when the cached build's size or theme
+  no longer matches.
+- Theme changes no longer re-paint hidden pooled charts; they rebuild
+  lazily when shown again.
+
 ## [0.10.8] - 2026-07-30
 
 ### Fixed
