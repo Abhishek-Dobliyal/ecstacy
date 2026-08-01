@@ -134,10 +134,10 @@ class PlotWidget(PlotextPlot):
 
     def _content_key(self) -> tuple:
         m = self._mapping
-        if m is None:
+        if m is None or self._dataset is None:
             return ()
         return (
-            id(self._dataset),
+            self._dataset._id,
             m.x,
             tuple(m.y),
             m.category,
@@ -268,7 +268,7 @@ class PlotWidget(PlotextPlot):
     # Textual render hook
 
     def render(self) -> RenderResult:
-        if self._needs_redraw:
+        if self._needs_redraw and self.size.width > 0:
             # Consume a redraw deferred while the widget had no size; at a
             # real width this either early-returns (cache hit) or dispatches
             # the worker, whose delivery refreshes us again.

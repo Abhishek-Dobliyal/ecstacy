@@ -44,7 +44,6 @@ class Source(ABC):
         on_status: Callable[[str], None] | None = None,
     ) -> AsyncIterator[DataSet]:
         raise NotImplementedError(f"{self.kind} source does not support streaming")
-        yield  # pragma: no cover
 
 
 class SourceSpec(BaseModel):

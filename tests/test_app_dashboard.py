@@ -435,14 +435,14 @@ async def test_panel_cache_hits_on_same_dataset():
             # Initial build populates cache
             assert 0 in screen._panel_cache
             cached_id, cached_ds = screen._panel_cache[0]
-            assert cached_id == id(screen._datasets["s"])
+            assert cached_id == screen._datasets["s"]._id
             # Manually trigger _update_panels_for with the same dataset
             screen._update_panels_for("s")
             await app.workers.wait_for_complete()
             for _ in range(6):
                 await pilot.pause()
             # Cache should still hit (same dataset object)
-            assert screen._panel_cache[0][0] == id(screen._datasets["s"])
+            assert screen._panel_cache[0][0] == screen._datasets["s"]._id
             assert screen._panel_cache[0][1] is cached_ds
 
 
@@ -504,7 +504,7 @@ async def test_panel_cache_misses_on_new_dataset():
             for _ in range(6):
                 await pilot.pause()
             # Cache should have been updated with the new dataset id
-            assert screen._panel_cache[0][0] == id(new_ds)
+            assert screen._panel_cache[0][0] == new_ds._id
             assert screen._panel_cache[0][1] is not first_cached[1]
 
 

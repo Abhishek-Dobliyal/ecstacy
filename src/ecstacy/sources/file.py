@@ -163,7 +163,7 @@ def _read_duckdb(
 ) -> tuple[pd.DataFrame, Any]:
     """Read a file via DuckDB's native parsers. Returns (frame, raw_json_or_None)."""
     limit = f" LIMIT {max_rows}" if max_rows is not None else ""
-    path_str = str(path).replace("'", "''")
+    path_str = str(path.resolve()).replace("'", "''")
     if fmt == "csv":
         query = f"SELECT * FROM read_csv_auto('{path_str}'){limit}"
     elif fmt == "tsv":

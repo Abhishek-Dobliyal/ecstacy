@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-08-01
+
+### Fixed
+- File sources now resolve absolute paths for DuckDB file-reading functions, preventing failures when the working directory is not the file's location.
+- `PlotWidget._content_key()` and dashboard panel cache keys now use a stable monotonic `DataSet._id` counter instead of Python's `id()`, eliminating a rare cache-collision risk on GC'd id reuse.
+- `PlotWidget.render()` no longer calls `redraw()` on every frame when the widget has no size yet (e.g. hidden), preventing a tight render loop and wasted CPU.
+- Removed dead unreachable `yield` after `raise` in `Source.stream()` base method.
+
 ## [0.11.3] - 2026-07-31
 
 ### Added

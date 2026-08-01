@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from itertools import count
 from typing import Any
 
 import pandas as pd
 from pandas.api import types as pdt
+
+_instance_counter = count()
 
 Role = str
 TIME: Role = "time"
@@ -57,6 +60,8 @@ class DataSet:
     frame: pd.DataFrame
     schema: Schema
     meta: Meta
+
+    _id: int = field(default_factory=lambda: next(_instance_counter), init=False, repr=False)
 
     @classmethod
     def from_dataframe(

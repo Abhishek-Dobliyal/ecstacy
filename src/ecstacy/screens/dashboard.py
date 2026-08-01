@@ -281,7 +281,7 @@ class DashboardScreen(Screen):
         def _work() -> None:
             # Offload transforms to a thread; skip via cache when unchanged.
             results: list[tuple[int, DataSet | TransformError]] = []
-            upstream_id = id(dataset)
+            upstream_id = dataset._id
             for idx, panel in targets:
                 cached = self._panel_cache.get(idx)
                 if cached is not None and cached[0] == upstream_id:
@@ -443,7 +443,7 @@ class DashboardScreen(Screen):
         except TransformError as error:
             return container, Label(f"transform error: {error.message}")
         transformed = self._build_transformed(panel, dataset, frame)
-        self._panel_cache[index] = (id(dataset), transformed)
+        self._panel_cache[index] = (dataset._id, transformed)
         mapping = _mapping_from_panel(panel)
         if hasattr(widget, "set_on_note"):
             def _on_note(note: str | None) -> None:
@@ -454,7 +454,7 @@ class DashboardScreen(Screen):
                         container.border_subtitle = value
             widget.set_on_note(_on_note)
         widget.set_data(transformed, mapping)  # type: ignore[attr-defined]
-        self._panel_widget_data[index] = id(dataset)
+        self._panel_widget_data[index] = dataset._id
         return container, widget
 
     def _build_transformed(
