@@ -16,7 +16,7 @@
     <img src="https://img.shields.io/pypi/v/ecstacy-tui" alt="PyPI version">
   </a>
   <a href="https://pepy.tech/projects/ecstacy-tui">
-    <img src="https://static.pepy.tech/badge/ecstacy-tui/month" alt="Downloads">
+    <img src="https://static.pepy.tech/badge/ecstacy-tui" alt="Downloads">
   </a>
   <a href="https://pypi.org/project/ecstacy-tui/">
     <img src="https://img.shields.io/pypi/pyversions/ecstacy-tui" alt="Python versions">

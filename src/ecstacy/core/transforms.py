@@ -120,7 +120,7 @@ def parse_transform_query(text: str) -> Transform:
         segment = segment.strip()
         if not segment:
             continue
-        tokens = segment.split(None, 1)
+        tokens = segment.split(maxsplit=1)
         if len(tokens) < 2:
             continue
         keyword, rest = tokens[0].lower(), tokens[1].strip()

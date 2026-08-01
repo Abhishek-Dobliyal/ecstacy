@@ -179,6 +179,8 @@ class ChartScreen(Screen):
         self._stop_refresh()
 
     def _stop_refresh(self) -> None:
+        from ecstacy.core.stream import close_source
+
         if self._stream_worker is not None:
             self._stream_worker.cancel()
             self._stream_worker = None
@@ -186,9 +188,7 @@ class ChartScreen(Screen):
             self._scheduler.stop()
             self._scheduler = None
         if self._source is not None:
-            close = getattr(self._source, "close", None)
-            if callable(close):
-                close()
+            close_source(self._source)
             self._source = None
         self._job = None
 

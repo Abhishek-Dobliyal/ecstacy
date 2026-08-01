@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.2] - 2026-08-01
+
+### Changed
+- `core/__init__.py` now exports `DataSet`, `Schema`, `Meta`, `EcstacyError`, `Registry`, `sources`, `viz`, `Job`, `Scheduler`, `Transform`, `TransformError`, `parse_transform_query` for cleaner imports.
+- `consume_stream()` now defaults `is_active` to `screen.app.screen is screen`, removing the need for callers to pass it explicitly.
+- Added `close_source()` helper to `ecstacy.core.stream`; `ChartScreen` and `DashboardScreen` use it instead of inline `getattr`/`callable` checks.
+- `segment.split(None, 1)` → `segment.split(maxsplit=1)` in transform parser (clearer intent, same behavior).
+
 ## [0.12.1] - 2026-08-01
 
 ### Changed

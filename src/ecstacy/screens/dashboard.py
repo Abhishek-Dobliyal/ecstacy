@@ -113,11 +113,11 @@ class DashboardScreen(Screen):
         self._start_scheduler()
 
     async def on_unmount(self) -> None:
+        from ecstacy.core.stream import close_source
+
         self._stop_scheduler()
         for source in self._sources.values():
-            close = getattr(source, "close", None)
-            if callable(close):
-                close()
+            close_source(source)
 
     def _stop_scheduler(self) -> None:
         for worker in self._stream_workers:
@@ -197,7 +197,6 @@ class DashboardScreen(Screen):
             on_data=self._on_data(source_id),
             on_error=self._on_error(source_id),
             keep_raw=keep_raw,
-            is_active=lambda: self.app.screen is self,
         )
 
     def _parse_refresh_interval(self) -> float:
