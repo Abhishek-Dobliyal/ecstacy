@@ -63,8 +63,8 @@ class TableView(Vertical):
         self._search_timer: Timer | None = None
         self._search_value = ""
         self._hidden_columns: set[str] = set()
-        self._string_frame: pd.DataFrame | None = None
-        self._string_frame_source: pd.DataFrame | None = None
+        self._string_cols: dict[str, pd.Series] = {}
+        self._string_cols_id: int = -1
         self._search_gen = 0
         self._rendered_columns: tuple[str, ...] = ()
         self._columns_signature: tuple[str, ...] = ()
@@ -202,19 +202,15 @@ class TableView(Vertical):
         hidden = set(self._hidden_columns)
 
         def _work() -> None:
-            strings = self._string_frame
-            if strings is None or self._string_frame_source is not frame:
-                strings = frame.astype(str).apply(lambda col: col.str.lower())
-                if self._frame is frame:
-                    self._string_frame = strings
-                    self._string_frame_source = frame
             work = frame
             if search:
                 needle = search.lower()
-                columns = [c for c in frame.columns if str(c) not in hidden]
-                mask = pd.Series(False, index=strings.index)
-                for col in columns:
-                    mask = mask | strings[col].str.contains(needle, na=False, regex=False)
+                mask = pd.Series(False, index=frame.index)
+                for col in frame.columns:
+                    if str(col) in hidden:
+                        continue
+                    col_str = self._string_col_cached(str(col))
+                    mask = mask | col_str.str.contains(needle, na=False, regex=False)
                 work = frame[mask]
             filtered_count = len(work)
             work = sort_frame_multi(work, sort_cols)
@@ -291,25 +287,28 @@ class TableView(Vertical):
             self._sort_cols.append((col, True))
         self._populate()
 
-    def _string_frame_cached(self) -> pd.DataFrame:
-        if self._string_frame is None or self._string_frame_source is not self._frame:
-            self._string_frame = self._frame.astype(str).apply(
-                lambda col: col.str.lower()
-            )
-            self._string_frame_source = self._frame
-        return self._string_frame
+    def _string_col_cached(self, col: str) -> pd.Series:
+        fid = id(self._frame)
+        if fid != self._string_cols_id:
+            self._string_cols = {}
+            self._string_cols_id = fid
+        if col not in self._string_cols:
+            self._string_cols[col] = self._frame[col].astype(str).str.lower()
+        return self._string_cols[col]
 
     def _filter_cached(self, frame: pd.DataFrame, search: str) -> pd.DataFrame:
         if not search:
             return frame
         needle = search.lower()
-        strings = self._string_frame_cached()
-        columns = [c for c in frame.columns if str(c) not in self._hidden_columns]
-        mask = pd.Series(False, index=strings.index)
-        for col in columns:
-            mask = mask | strings[col].str.contains(needle, na=False, regex=False)
-        if not mask.index.equals(frame.index):
-            mask = mask.reindex(frame.index, fill_value=False)
+        mask = pd.Series(False, index=frame.index)
+        for col in frame.columns:
+            if str(col) in self._hidden_columns:
+                continue
+            col_str = self._string_col_cached(str(col))
+            col_mask = col_str.str.contains(needle, na=False, regex=False)
+            if not col_mask.index.equals(frame.index):
+                col_mask = col_mask.reindex(frame.index, fill_value=False)
+            mask = mask | col_mask
         return frame[mask]
 
     def _populate(self, search: str = "") -> None:

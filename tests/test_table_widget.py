@@ -126,11 +126,11 @@ def test_filter_cached_reuses_cached_strings():
     tv._frame = _sample()
     first = tv._filter_cached(tv._frame, "us")
     assert len(first) == 2
-    cached = tv._string_frame
-    assert cached is not None
+    assert len(tv._string_cols) > 0
+    cached_region = tv._string_cols["region"]
     second = tv._filter_cached(tv._frame, "eu")
     assert len(second) == 2
-    assert tv._string_frame is cached
+    assert tv._string_cols["region"] is cached_region
 
 
 def test_filter_cached_respects_sorted_index():
@@ -150,13 +150,13 @@ def test_string_cache_invalidates_on_frame_swap():
     frame_a = _sample()
     tv._frame = frame_a
     tv._filter_cached(frame_a, "us")
-    assert tv._string_frame is not None
-    assert tv._string_frame_source is frame_a
+    assert tv._string_cols_id == id(frame_a)
+    assert len(tv._string_cols) > 0
     # new frame object (as on refresh) → identity check invalidates cache
     frame_b = _sample()
     tv._frame = frame_b
     tv._filter_cached(frame_b, "us")
-    assert tv._string_frame_source is frame_b
+    assert tv._string_cols_id == id(frame_b)
 
 
 def test_set_data_preserves_sort_and_hidden_on_same_columns():

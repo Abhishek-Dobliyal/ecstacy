@@ -351,7 +351,6 @@ class DashboardScreen(Screen):
         holder = self.query_one("#dashboard-holder", Container)
         await holder.remove_children()
         self._panel_widgets = {}
-        self._panel_cache = {}
         self._single_pool = {}
         self._panel_widget_data = {}
         self._panels_built = False
@@ -438,12 +437,16 @@ class DashboardScreen(Screen):
             widget: Widget = create_viz(panel.viz)
         except Exception as error:
             return container, Label(f"cannot create widget {panel.viz!r}: {error}")
-        try:
-            frame = self._apply_transform(panel, dataset.frame)
-        except TransformError as error:
-            return container, Label(f"transform error: {error.message}")
-        transformed = self._build_transformed(panel, dataset, frame)
-        self._panel_cache[index] = (dataset._id, transformed)
+        cached = self._panel_cache.get(index)
+        if cached is not None and cached[0] == dataset._id:
+            transformed = cached[1]
+        else:
+            try:
+                frame = self._apply_transform(panel, dataset.frame)
+            except TransformError as error:
+                return container, Label(f"transform error: {error.message}")
+            transformed = self._build_transformed(panel, dataset, frame)
+            self._panel_cache[index] = (dataset._id, transformed)
         mapping = _mapping_from_panel(panel)
         if hasattr(widget, "set_on_note"):
             def _on_note(note: str | None) -> None:
