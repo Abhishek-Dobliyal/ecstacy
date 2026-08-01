@@ -5,7 +5,7 @@ import pytest
 
 from ecstacy.core.dataset import DataSet
 from ecstacy.widgets.gauge import _render
-from ecstacy.widgets.json_tree import _add
+from ecstacy.widgets.json_tree import JsonTree, _add
 
 
 @pytest.mark.asyncio
@@ -100,6 +100,35 @@ def test_json_tree_add_list():
     tree = Tree("root")
     _add(tree.root, [1, 2, {"key": "val"}])
     assert tree.root.children is not None
+
+
+def test_json_tree_truncates_large_list():
+    widget = JsonTree()
+    # Simulate set_data with a large raw list
+    large_raw = [{"i": i} for i in range(50)]
+    ds = DataSet.from_dataframe(
+        pd.DataFrame({"a": [1]}), source_id="s", kind="rest", raw=large_raw
+    )
+    widget.set_data(ds)
+    # Tree should have 20 data nodes + 1 truncation leaf
+    children = widget.root.children
+    assert children is not None
+    assert len(children) == 21
+    last = children[-1]
+    assert not last.allow_expand
+    assert "30 more" in last.label.plain
+
+
+def test_json_tree_no_truncation_for_small_list():
+    widget = JsonTree()
+    small_raw = [{"x": 1}, {"x": 2}]
+    ds = DataSet.from_dataframe(
+        pd.DataFrame({"a": [1]}), source_id="s", kind="rest", raw=small_raw
+    )
+    widget.set_data(ds)
+    children = widget.root.children
+    assert children is not None
+    assert len(children) == 2
 
 
 @pytest.mark.asyncio

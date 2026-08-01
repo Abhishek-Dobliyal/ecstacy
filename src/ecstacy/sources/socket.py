@@ -8,7 +8,7 @@ import pandas as pd
 
 from ecstacy.core import registry
 from ecstacy.core.dataset import DataSet
-from ecstacy.sources.base import Source, SourceError
+from ecstacy.sources.base import SourceError, StreamableSource
 
 
 def _records_to_frame(records: list[Any]) -> pd.DataFrame:
@@ -20,9 +20,8 @@ def _records_to_frame(records: list[Any]) -> pd.DataFrame:
 
 
 @registry.sources.register("socket")
-class SocketSource(Source):
+class SocketSource(StreamableSource):
     kind = "socket"
-    supports_stream = True
 
     def __init__(
         self,

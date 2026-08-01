@@ -376,11 +376,10 @@ async def test_streaming_source_updates_dataset(monkeypatch):
     from textual.app import App
 
     from ecstacy.screens.chart import ChartScreen
-    from ecstacy.sources.base import Source, SourceSpec
+    from ecstacy.sources.base import SourceSpec, StreamableSource
 
-    class FakeStreamSource(Source):
+    class FakeStreamSource(StreamableSource):
         kind = "socket"
-        supports_stream = True
 
         def fetch(self, keep_raw: bool = False):
             raise NotImplementedError
@@ -621,11 +620,10 @@ async def test_stream_worker_ref_cleared_after_stream_ends(monkeypatch):
     from textual.app import App
 
     from ecstacy.screens.chart import ChartScreen
-    from ecstacy.sources.base import Source, SourceSpec
+    from ecstacy.sources.base import SourceSpec, StreamableSource
 
-    class FakeStreamSource(Source):
+    class FakeStreamSource(StreamableSource):
         kind = "socket"
-        supports_stream = True
 
         def fetch(self, keep_raw: bool = False):
             raise NotImplementedError
@@ -661,11 +659,10 @@ async def test_stream_worker_ref_cleared_on_error(monkeypatch):
     from textual.app import App
 
     from ecstacy.screens.chart import ChartScreen
-    from ecstacy.sources.base import Source, SourceError, SourceSpec
+    from ecstacy.sources.base import SourceError, SourceSpec, StreamableSource
 
-    class FakeStreamSource(Source):
+    class FakeStreamSource(StreamableSource):
         kind = "socket"
-        supports_stream = True
 
         def fetch(self, keep_raw: bool = False):
             raise NotImplementedError

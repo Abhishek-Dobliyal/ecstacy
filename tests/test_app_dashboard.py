@@ -251,11 +251,10 @@ async def test_dashboard_stream_updates_panels(monkeypatch):
     from ecstacy.config.schema import (
         SourceSpec as SchemaSourceSpec,
     )
-    from ecstacy.sources.base import Source
+    from ecstacy.sources.base import StreamableSource
 
-    class FakeStreamSource(Source):
+    class FakeStreamSource(StreamableSource):
         kind = "socket"
-        supports_stream = True
 
         def __init__(self, id, **kwargs):
             super().__init__(id=id)
@@ -306,11 +305,10 @@ async def test_dashboard_stream_and_poll_coexist(monkeypatch):
     from ecstacy.config.schema import (
         SourceSpec as SchemaSourceSpec,
     )
-    from ecstacy.sources.base import Source
+    from ecstacy.sources.base import StreamableSource
 
-    class FakeStreamSource(Source):
+    class FakeStreamSource(StreamableSource):
         kind = "socket"
-        supports_stream = True
 
         def __init__(self, id, **kwargs):
             super().__init__(id=id)

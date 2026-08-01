@@ -14,7 +14,7 @@ from ecstacy.config.schema import DashboardConfig, PanelConfig
 from ecstacy.core.dataset import DataSet, Meta, Schema
 from ecstacy.core.scheduler import Job, Scheduler
 from ecstacy.core.transforms import Transform, TransformError
-from ecstacy.sources.base import Source, SourceError, SourceSpec, create_source
+from ecstacy.sources.base import Source, SourceError, SourceSpec, StreamableSource, create_source
 from ecstacy.util.timeparse import parse_duration
 from ecstacy.widgets import create_viz
 from ecstacy.widgets.base import ColumnMapping
@@ -153,7 +153,7 @@ class DashboardScreen(Screen):
                 continue
             self._sources[spec.id] = source
             keep_raw = spec.id in json_sources
-            if getattr(source, "supports_stream", False):
+            if isinstance(source, StreamableSource):
                 self._start_stream(source, spec.id, keep_raw)
                 continue
             job = Job(

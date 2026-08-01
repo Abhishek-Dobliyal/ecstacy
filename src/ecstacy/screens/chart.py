@@ -12,7 +12,7 @@ from textual.widgets import DataTable, Footer, Header, Input, Label
 from ecstacy.core.dataset import DataSet
 from ecstacy.core.scheduler import Job, Scheduler
 from ecstacy.core.transforms import TransformError, parse_transform_query
-from ecstacy.sources.base import Source, SourceError, SourceSpec, create_source
+from ecstacy.sources.base import Source, SourceError, SourceSpec, StreamableSource, create_source
 from ecstacy.widgets import create_viz, resolve_viz, viz_names
 from ecstacy.widgets.base import ColumnMapping
 
@@ -207,7 +207,7 @@ class ChartScreen(Screen):
         if getattr(source, "is_stdin", False):
             return  # re-reading stdin would hit EOF or block on a live pipe
         keep_raw = resolve_viz(self.names[self.index]) == "json"
-        if getattr(source, "supports_stream", False):
+        if isinstance(source, StreamableSource):
             self._start_stream(source, keep_raw=keep_raw)
             return
         self._scheduler = Scheduler(self.app, is_active=lambda: self.app.screen is self)

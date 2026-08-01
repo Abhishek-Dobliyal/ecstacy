@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.3] - 2026-08-01
+
+### Changed
+- `StreamableSource` ABC replaces the `supports_stream` boolean flag. Sources that stream inherit from `StreamableSource` (which makes `stream()` abstract) instead of setting a flag; callers check `isinstance(source, StreamableSource)`. `SocketSource` now extends `StreamableSource`.
+- JSON tree explorer shows the first 20 items of a top-level list (down from 200) and appends a `… and N more (use table view to browse all)` leaf when truncated. DataFrame fallback also caps at 20. Nested arrays keep the 200-item limit.
+
 ## [0.12.2] - 2026-08-01
 
 ### Changed

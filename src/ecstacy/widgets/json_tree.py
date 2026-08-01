@@ -11,6 +11,7 @@ from ecstacy.widgets.base import ColumnMapping
 
 _MAX_ITEMS = 200
 _MAX_DEPTH = 20
+_TOP_LEVEL_MAX = 20
 
 
 @registry.viz.register("json")
@@ -23,9 +24,27 @@ class JsonTree(Tree):
     def set_data(self, dataset: DataSet, mapping: ColumnMapping | None = None) -> None:
         self.clear()
         data = dataset.meta.raw
+        remaining = 0
         if data is None:
-            data = dataset.frame.head(_MAX_ITEMS).to_dict(orient="records")
+            frame = dataset.frame
+            total = len(frame)
+            if total > _TOP_LEVEL_MAX:
+                remaining = total - _TOP_LEVEL_MAX
+            data = frame.head(_TOP_LEVEL_MAX).to_dict(orient="records")
+        elif isinstance(data, list) and len(data) > _TOP_LEVEL_MAX:
+            remaining = len(data) - _TOP_LEVEL_MAX
+            data = data[:_TOP_LEVEL_MAX]
         _add(self.root, data)
+        if remaining > 0:
+            self.root.add_leaf(
+                f"… and {remaining:,} more (use table view to browse all)"
+            )
+            if self.is_mounted:
+                self.notify(
+                    f"showing first {_TOP_LEVEL_MAX} of {remaining + _TOP_LEVEL_MAX:,} items — "
+                    "use table view to browse all",
+                    severity="information",
+                )
         self.root.expand()
 
 

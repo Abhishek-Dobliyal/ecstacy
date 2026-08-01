@@ -24,7 +24,6 @@ class SourceSpecError(EcstacyError):
 
 class Source(ABC):
     kind: str = "base"
-    supports_stream: bool = False
     supports_progressive: bool = False
     max_rows: int | None = None
 
@@ -38,12 +37,21 @@ class Source(ABC):
     def describe(self) -> str:
         return f"{self.kind}:{self.id}"
 
-    async def stream(
+
+class StreamableSource(Source):
+    """A Source that supports live streaming via an async generator.
+
+    Subclasses must implement ``stream()`` as an async generator; callers
+    check ``isinstance(source, StreamableSource)`` instead of a bool flag.
+    """
+
+    @abstractmethod
+    def stream(
         self,
         keep_raw: bool = False,
         on_status: Callable[[str], None] | None = None,
     ) -> AsyncIterator[DataSet]:
-        raise NotImplementedError(f"{self.kind} source does not support streaming")
+        ...
 
 
 class SourceSpec(BaseModel):
