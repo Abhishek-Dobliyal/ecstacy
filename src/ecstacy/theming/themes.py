@@ -33,6 +33,7 @@ ECSTACY_LIGHT = Theme(
 )
 
 THEMES = [ECSTACY_DARK, ECSTACY_LIGHT]
+_THEME_NAMES = tuple(t.name for t in THEMES)
 
 
 def register_themes(app) -> None:
@@ -41,4 +42,4 @@ def register_themes(app) -> None:
 
 
 def theme_names() -> list[str]:
-    return [theme.name for theme in THEMES]
+    return list(_THEME_NAMES)

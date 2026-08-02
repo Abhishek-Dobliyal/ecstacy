@@ -58,15 +58,10 @@ class PanelConfig(BaseModel):
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> PanelConfig:
         payload = dict(data)
-        y = payload.get("y")
-        if isinstance(y, str):
-            payload["y"] = [y]
-        gb = payload.get("group_by")
-        if isinstance(gb, str):
-            payload["group_by"] = [gb]
-        sel = payload.get("select")
-        if isinstance(sel, str):
-            payload["select"] = [sel]
+        for field in ("y", "group_by", "select"):
+            v = payload.get(field)
+            if isinstance(v, str):
+                payload[field] = [v]
         return cls(**payload)
 
 
@@ -101,9 +96,8 @@ class DashboardConfig(BaseModel):
             raise ConfigError(
                 f"duplicate source id(s): {', '.join(sorted(duplicates))}"
             )
-        source_ids = {s.id for s in self.sources}
         for panel in self.panels:
-            if panel.source not in source_ids:
+            if panel.source not in seen:
                 raise ConfigError(
                     f"panel references unknown source: {panel.source!r}"
                 )

@@ -333,7 +333,7 @@ async def test_panels_paint_on_initial_render():
         await _settle(pilot)
         widget = screen._panel_widgets[0]
         assert widget._render_data is not None
-        assert widget._paint_gen >= 1
+        assert widget._build_cache is not None
 
 
 @pytest.mark.asyncio

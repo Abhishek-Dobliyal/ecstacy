@@ -4,6 +4,7 @@ from ecstacy.widgets.charts._helpers import (  # noqa: F401
     _decorate,
     _downsample_xy,
     _dropna_xy,
+    _grouped_topn,
     _heat_color,
     _heat_colors,
     _hex_rgb,

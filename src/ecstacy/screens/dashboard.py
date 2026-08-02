@@ -13,10 +13,11 @@ from textual.widgets import Footer, Header, Label
 from ecstacy.config.schema import DashboardConfig, PanelConfig
 from ecstacy.core.dataset import DataSet, Meta, Schema
 from ecstacy.core.scheduler import Job, Scheduler
+from ecstacy.core.stream import close_source, consume_stream
 from ecstacy.core.transforms import Transform, TransformError
 from ecstacy.sources.base import Source, SourceError, SourceSpec, StreamableSource, create_source
 from ecstacy.util.timeparse import parse_duration
-from ecstacy.widgets import create_viz
+from ecstacy.widgets import create_viz, resolve_viz
 from ecstacy.widgets.base import ColumnMapping
 
 if TYPE_CHECKING:
@@ -30,6 +31,16 @@ def _mapping_from_panel(panel: PanelConfig) -> ColumnMapping:
         category=panel.category,
         value=panel.value,
         bins=panel.bins,
+    )
+
+
+def _panel_has_transform(panel: PanelConfig) -> bool:
+    return bool(
+        panel.where
+        or panel.group_by
+        or panel.select
+        or panel.limit is not None
+        or panel.agg != "sum"
     )
 
 
@@ -113,8 +124,6 @@ class DashboardScreen(Screen):
         self._start_scheduler()
 
     async def on_unmount(self) -> None:
-        from ecstacy.core.stream import close_source
-
         self._stop_scheduler()
         for source in self._sources.values():
             close_source(source)
@@ -130,8 +139,6 @@ class DashboardScreen(Screen):
         self._jobs = []
 
     def _start_scheduler(self) -> None:
-        from ecstacy.widgets import resolve_viz
-
         self._stop_scheduler()
         interval = self._parse_refresh_interval()
         self._scheduler = Scheduler(self.app, is_active=lambda: self.app.screen is self)
@@ -189,8 +196,6 @@ class DashboardScreen(Screen):
     async def _consume_stream(
         self, source: Source, source_id: str, keep_raw: bool = False
     ) -> None:
-        from ecstacy.core.stream import consume_stream
-
         await consume_stream(
             source=source,
             screen=self,
@@ -316,7 +321,7 @@ class DashboardScreen(Screen):
                 continue
             if not self._multi_panel:
                 container = self._single_pool.get(idx)
-                if container is not None and container.display is False:
+                if container is not None and not container.display:
                     # Hidden pooled panel — skip the paint/rebuild; it is
                     # refreshed lazily from _panel_cache when shown again.
                     continue
@@ -465,16 +470,9 @@ class DashboardScreen(Screen):
         """Build a DataSet from a transformed frame. Optimizes schema reuse
         for where-only and select/limit transforms; runs full inference for
         group/agg/resample."""
-        has_transform = (
-            panel.where
-            or panel.group_by
-            or panel.select
-            or panel.limit is not None
-            or panel.agg != "sum"
-        )
-        if not has_transform:
+        if not _panel_has_transform(panel):
             return dataset
-        has_grouping = bool(panel.group_by) or bool(getattr(panel, "resample", None))
+        has_grouping = bool(panel.group_by) or getattr(panel, "resample", None)
         has_select = bool(panel.select)
         has_where = bool(panel.where)
         source_id = dataset.meta.source_id
@@ -505,14 +503,7 @@ class DashboardScreen(Screen):
         )
 
     def _apply_transform(self, panel: PanelConfig, frame: pd.DataFrame) -> pd.DataFrame:
-        has_transform = (
-            panel.where
-            or panel.group_by
-            or panel.select
-            or panel.limit is not None
-            or panel.agg != "sum"
-        )
-        if not has_transform:
+        if not _panel_has_transform(panel):
             return frame
         transform = Transform(
             select=panel.select or None,

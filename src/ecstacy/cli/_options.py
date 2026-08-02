@@ -27,3 +27,11 @@ def _export_option() -> Any:
         "--export",
         help="Export data to stdout and exit (headless). One of: csv, json, markdown",
     )
+
+
+def _theme_option() -> Any:
+    return typer.Option(None, "--theme", help="Theme name")
+
+
+def _no_splash_option() -> Any:
+    return typer.Option(True, "--no-splash/--splash", help="Skip the splash screen")

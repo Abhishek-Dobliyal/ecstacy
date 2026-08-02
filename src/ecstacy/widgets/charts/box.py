@@ -51,27 +51,25 @@ class BoxPlot(PlotWidget):
                 ylabel=value,
                 note=note,
             )
-        else:
-            series = numeric(frame[value]).dropna()
-            total = len(series)
-            if total > budget:
-                series = series.tail(budget)
-            if series.empty:
-                return _BoxPayload(title=f"no data for {value}")
-            note = f"last {len(series):,} of {total:,} values" if total > budget else None
-            return _BoxPayload(
-                labels=[value],
-                data=[series.tolist()],
-                title=f"distribution of {value}",
-                ylabel=value,
-                note=note,
-            )
+        series = numeric(frame[value]).dropna()
+        total = len(series)
+        if total > budget:
+            series = series.tail(budget)
+        if series.empty:
+            return _BoxPayload(title=f"no data for {value}")
+        note = f"last {len(series):,} of {total:,} values" if total > budget else None
+        return _BoxPayload(
+            labels=[value],
+            data=[series.tolist()],
+            title=f"distribution of {value}",
+            ylabel=value,
+            note=note,
+        )
 
     def _paint(self, plt, payload: _BoxPayload, theme) -> None:
         if not payload.data:
             _decorate(plt, payload.title)
             return
-        palette = [theme.primary, theme.accent, theme.secondary]
-        colors = [_hex_rgb(palette[0]), _hex_rgb(palette[1])]
+        colors = [_hex_rgb(theme.primary), _hex_rgb(theme.accent)]
         plt.box(payload.labels, payload.data, colors=colors)
         _decorate(plt, payload.title, ylabel=payload.ylabel)

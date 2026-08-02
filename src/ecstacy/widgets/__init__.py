@@ -2,7 +2,6 @@ from textual.widget import Widget
 
 from ecstacy.core import registry
 from ecstacy.widgets import charts, gauge, json_tree, spark, summary, table  # noqa: F401
-from ecstacy.widgets.base import ColumnMapping, auto_mapping
 
 VIZ_ORDER = [
     "table",
@@ -39,10 +38,7 @@ def create_viz(name: str) -> Widget:
 
 
 __all__ = [
-    "ColumnMapping",
-    "auto_mapping",
     "viz_names",
     "create_viz",
     "resolve_viz",
-    "VIZ_ORDER",
 ]

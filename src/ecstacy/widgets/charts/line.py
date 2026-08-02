@@ -6,10 +6,12 @@ import pandas as pd
 from ecstacy.core import registry
 from ecstacy.widgets.base import ColumnMapping, PlotWidget, numeric
 from ecstacy.widgets.charts._helpers import (
+    _decorate,
     _downsample_xy,
     _hex_rgb,
     _lttb,
     _numeric_columns,
+    _theme_palette,
     _to_numeric_or_timestamp,
 )
 from ecstacy.widgets.charts._payloads import _LinePayload, _LineSeries
@@ -24,15 +26,14 @@ class LineChart(PlotWidget):
         if not ycols:
             return _LinePayload(title="line chart needs a numeric column")
         xcol = mapping.x if mapping.x and mapping.x in frame.columns else None
-        work = frame
         series_list: list[_LineSeries] = []
         downsampled = False
         for col in ycols:
-            yvals_raw = numeric(work[col]).dropna()
+            yvals_raw = numeric(frame[col]).dropna()
             if yvals_raw.empty:
                 continue
-            if xcol is not None and xcol in work.columns:
-                x_raw = _to_numeric_or_timestamp(work[xcol])
+            if xcol is not None and xcol in frame.columns:
+                x_raw = _to_numeric_or_timestamp(frame[xcol])
                 x_aligned = x_raw.loc[yvals_raw.index].dropna()
                 y_aligned = yvals_raw.loc[x_aligned.index]
                 if len(y_aligned) > budget:
@@ -61,7 +62,7 @@ class LineChart(PlotWidget):
         title = " / ".join(ycols) if ycols else "line"
         if xcol:
             title = f"{title} over {xcol}"
-        note = f"↓ {len(work):,} → {budget:,} points" if downsampled else None
+        note = f"↓ {len(frame):,} → {budget:,} points" if downsampled else None
         return _LinePayload(
             series=series_list,
             title=title,
@@ -72,15 +73,13 @@ class LineChart(PlotWidget):
 
     def _paint(self, plt, payload: _LinePayload, theme) -> None:
         if not payload.series:
-            from ecstacy.widgets.charts._helpers import _decorate
             _decorate(plt, payload.title)
             return
-        palette = [theme.primary, theme.accent, theme.secondary]
+        palette = _theme_palette(theme)
         for i, s in enumerate(payload.series):
             color = _hex_rgb(palette[i % len(palette)])
             if s.x is not None:
                 plt.plot(s.x, s.y, label=s.label, marker="braille", color=color)
             else:
                 plt.plot(s.y, label=s.label, marker="braille", color=color)
-        from ecstacy.widgets.charts._helpers import _decorate
         _decorate(plt, payload.title, xlabel=payload.xlabel, ylabel=payload.ylabel)

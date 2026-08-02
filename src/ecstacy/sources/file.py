@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import warnings
 from itertools import islice
 from pathlib import Path
 from typing import Any
@@ -12,7 +13,6 @@ from pandas.api import types as pdt
 
 from ecstacy.core import registry
 from ecstacy.core.dataset import DataSet
-from ecstacy.core.dataset import deduplicate_columns as _deduplicate_columns
 from ecstacy.sources.base import Source, SourceError
 
 _READERS = {
@@ -69,7 +69,6 @@ class FileSource(Source):
                 str(c) for c in frame.columns if pdt.is_datetime64_any_dtype(frame[c])
             ]
             return frame
-        import warnings
 
         for name in self._date_columns:
             if name not in frame.columns or pdt.is_datetime64_any_dtype(frame[name]):
@@ -108,7 +107,6 @@ class FileSource(Source):
             raise SourceError(
                 f"failed to read {self.path} as {self.fmt}: {exc}", source_id=self.id
             ) from exc
-        frame = _deduplicate_columns(frame)
         frame = self._parse_dates(frame)
         return DataSet.from_dataframe(frame, source_id=self.id, kind=self.kind, raw=raw)
 
@@ -153,7 +151,6 @@ class FileSource(Source):
             frame = frame.head(self.max_rows)
         if self.fmt == "json" and not keep_raw:
             raw = None
-        frame = _deduplicate_columns(frame)
         frame = self._parse_dates(frame)
         return DataSet.from_dataframe(frame, source_id=self.id, kind=self.kind, raw=raw)
 
@@ -227,7 +224,7 @@ def _looks_like_envelope(frame: pd.DataFrame) -> bool:
     if len(frame) != 1 or len(frame.columns) != 1:
         return False
     val = frame.iloc[0, 0]
-    return isinstance(val, (list,)) or (
+    return isinstance(val, list) or (
         hasattr(val, "__iter__") and not isinstance(val, (str, bytes, dict))
     )
 
@@ -259,8 +256,6 @@ def _read_excel(
 
 
 def _autoparse_dates(frame: pd.DataFrame) -> pd.DataFrame:
-    import warnings
-
     for name in frame.columns:
         series = frame[name]
         if pdt.is_numeric_dtype(series) or pdt.is_datetime64_any_dtype(series):

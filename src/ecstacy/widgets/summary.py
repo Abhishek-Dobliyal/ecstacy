@@ -33,8 +33,7 @@ class SummaryCard(Static):
         )
         numeric_frame = frame[numeric_cols]
         stats = numeric_frame.agg(["count", "mean", "median", "std", "min", "max"])
-        for col in numeric_cols:
-            col_stats = stats[col]
+        for col, col_stats in stats.items():
             if col_stats["count"] == 0:
                 continue
             lines.append(

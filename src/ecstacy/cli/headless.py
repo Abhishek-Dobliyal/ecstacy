@@ -6,7 +6,25 @@ import typer
 
 from ecstacy.sources.base import SourceError, SourceSpec, create_source
 
-_EXPORT_FORMATS = ["csv", "json", "markdown"]
+
+def _emit_csv(frame, f) -> None:
+    frame.to_csv(f, index=False)
+
+
+def _emit_json(frame, f) -> None:
+    typer.echo(frame.to_json(orient="records", indent=2, date_format="iso"))
+
+
+def _emit_markdown(frame, f) -> None:
+    typer.echo(frame.to_markdown(index=False))
+
+
+_EXPORT_DISPATCH = {
+    "csv": _emit_csv,
+    "json": _emit_json,
+    "markdown": _emit_markdown,
+}
+_EXPORT_FORMATS = list(_EXPORT_DISPATCH)
 
 
 def _is_headless(head: int | None, tail: int | None, export: str | None) -> bool:
@@ -24,16 +42,13 @@ def _slice_frame(frame, head: int | None, tail: int | None):
 def _emit(frame, export: str | None) -> None:
     if export is None:
         typer.echo(frame.to_string(index=False))
-    elif export == "csv":
-        frame.to_csv(sys.stdout, index=False)
-    elif export == "json":
-        typer.echo(frame.to_json(orient="records", indent=2, date_format="iso"))
-    elif export == "markdown":
-        typer.echo(frame.to_markdown(index=False))
-    else:
+        return
+    emitter = _EXPORT_DISPATCH.get(export)
+    if emitter is None:
         raise typer.BadParameter(
             f"unknown export format {export!r}; expected one of {', '.join(_EXPORT_FORMATS)}"
         )
+    emitter(frame, sys.stdout)
 
 
 def _run_headless(

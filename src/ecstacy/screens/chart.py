@@ -11,10 +11,12 @@ from textual.widgets import DataTable, Footer, Header, Input, Label
 
 from ecstacy.core.dataset import DataSet
 from ecstacy.core.scheduler import Job, Scheduler
+from ecstacy.core.stream import close_source, consume_stream
 from ecstacy.core.transforms import TransformError, parse_transform_query
+from ecstacy.screens.modals import VIZ_NO_MAPPING, ChartMappingScreen
 from ecstacy.sources.base import Source, SourceError, SourceSpec, StreamableSource, create_source
 from ecstacy.widgets import create_viz, resolve_viz, viz_names
-from ecstacy.widgets.base import ColumnMapping
+from ecstacy.widgets.base import ColumnMapping, auto_mapping
 
 if TYPE_CHECKING:
     from textual.worker import Worker
@@ -122,22 +124,19 @@ class ChartScreen(Screen):
         yield Label("", id="chart-note")
         yield Footer()
 
-    def action_focus_transform(self) -> None:
+    def _focus_input(self, bar_id: str) -> None:
         if self._active_widget is not None and hasattr(self._active_widget, "set_search"):
-            bar = self.query_one("#transform-bar", Input)
+            bar = self.query_one(bar_id, Input)
             bar.can_focus = True
             bar.focus()
+
+    def action_focus_transform(self) -> None:
+        self._focus_input("#transform-bar")
 
     def action_focus_search(self) -> None:
-        if self._active_widget is not None and hasattr(self._active_widget, "set_search"):
-            bar = self.query_one("#search-bar", Input)
-            bar.can_focus = True
-            bar.focus()
+        self._focus_input("#search-bar")
 
     def action_column_picker(self) -> None:
-        from ecstacy.screens.modals import VIZ_NO_MAPPING, ChartMappingScreen
-        from ecstacy.widgets.base import auto_mapping
-
         name = self.names[self.index]
         if name in VIZ_NO_MAPPING:
             self.notify("this view has no column mapping", severity="information")
@@ -179,8 +178,6 @@ class ChartScreen(Screen):
         self._stop_refresh()
 
     def _stop_refresh(self) -> None:
-        from ecstacy.core.stream import close_source
-
         if self._stream_worker is not None:
             self._stream_worker.cancel()
             self._stream_worker = None
@@ -193,8 +190,6 @@ class ChartScreen(Screen):
         self._job = None
 
     def _start_refresh(self) -> None:
-        from ecstacy.widgets import resolve_viz
-
         self._stop_refresh()
         if self.spec is None:
             return
@@ -229,8 +224,6 @@ class ChartScreen(Screen):
         )
 
     async def _consume_stream(self, source: Source, keep_raw: bool = False) -> None:
-        from ecstacy.core.stream import consume_stream
-
         await consume_stream(
             source=source,
             screen=self,

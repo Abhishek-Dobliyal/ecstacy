@@ -79,7 +79,6 @@ class PlotWidget(PlotextPlot):
         self._render_data: object | None = None
         self._render_key: tuple | None = None
         self._render_gen = 0
-        self._paint_gen = 0
         self._needs_redraw = False
         self._build_cache: Text | None = None
         self._build_cache_key: tuple | None = None
@@ -179,11 +178,12 @@ class PlotWidget(PlotextPlot):
         self._render_key = key
         self._dispatch(do_prepare=True)
 
-    def _ensure_build(self) -> None:
+    def _ensure_build(self, target: tuple | None = None) -> None:
         """Re-paint + rebuild from the cached payload when size/theme moved."""
         if self._render_data is None and self._build_in_flight is None:
             return
-        target = (self.size.width, self.size.height, self._theme_name())
+        if target is None:
+            target = (self.size.width, self.size.height, self._theme_name())
         if target == self._build_cache_key and self._build_cache is not None:
             return  # cached build is current
         in_flight = self._build_in_flight
@@ -260,7 +260,6 @@ class PlotWidget(PlotextPlot):
             self._last_note = note
             if self._on_note is not None:
                 self._on_note(note)
-        self._paint_gen += 1
         self._build_cache = text
         self._build_cache_key = target
         self.refresh()
@@ -268,14 +267,14 @@ class PlotWidget(PlotextPlot):
     # Textual render hook
 
     def render(self) -> RenderResult:
+        key = (self.size.width, self.size.height, self._theme_name())
         if self._needs_redraw and self.size.width > 0:
             # Consume a redraw deferred while the widget had no size; at a
             # real width this either early-returns (cache hit) or dispatches
             # the worker, whose delivery refreshes us again.
             self.redraw()
         elif self._render_data is not None:
-            self._ensure_build()
-        key = (self.size.width, self.size.height, self._theme_name())
+            self._ensure_build(key)
         if key == self._build_cache_key and self._build_cache is not None:
             return self._build_cache
         # Nothing current to show yet — return the stale build (Textual

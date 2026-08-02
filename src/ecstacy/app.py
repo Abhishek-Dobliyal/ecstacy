@@ -4,6 +4,7 @@ from pathlib import Path
 
 from textual.app import App
 
+from ecstacy.config.defaults import DEFAULT_THEME
 from ecstacy.config.loader import load_dashboard
 from ecstacy.config.schema import AppConfig, ConfigError, DashboardConfig
 from ecstacy.core.dataset import DataSet
@@ -14,6 +15,7 @@ from ecstacy.screens.splash import SplashScreen
 from ecstacy.sources.base import Source, SourceError, SourceSpec, create_source
 from ecstacy.theming import register_themes, theme_names
 from ecstacy.util.timeparse import parse_duration
+from ecstacy.widgets import resolve_viz
 from ecstacy.widgets.base import ColumnMapping
 
 _CSS_PATH = str(Path(__file__).parent / "theming" / "ecstacy.tcss")
@@ -47,7 +49,7 @@ class EcstacyApp(App):
         self.theme = (
             self.config.theme
             if self.config.theme in self.available_themes
-            else "ecstacy-dark"
+            else DEFAULT_THEME
         )
         self.push_screen(HomeScreen())
         if self._open_spec is not None:
@@ -59,7 +61,10 @@ class EcstacyApp(App):
 
     def action_toggle_theme(self) -> None:
         names = theme_names()
-        index = names.index(self.theme) if self.theme in names else -1
+        try:
+            index = names.index(self.theme)
+        except ValueError:
+            index = -1
         self.theme = names[(index + 1) % len(names)]
         self.notify(f"theme: {self.theme}")
 
@@ -103,8 +108,6 @@ class EcstacyApp(App):
     def _fetch_and_show(
         self, spec: SourceSpec, viz: str, mapping: ColumnMapping | None
     ) -> None:
-        from ecstacy.widgets import resolve_viz
-
         keep_raw = resolve_viz(viz) == "json"
         key = (spec.kind, spec.id)
         try:
@@ -216,7 +219,7 @@ class EcstacyApp(App):
 
 def spec_from_target(text: str) -> SourceSpec:
     target = text.strip()
-    if target.startswith("http://") or target.startswith("https://"):
+    if target.startswith(("http://", "https://")):
         return SourceSpec(kind="rest", id=target, params={"url": target})
     path = Path(target).expanduser()
     return SourceSpec(kind="file", id=path.name, params={"path": str(path)})

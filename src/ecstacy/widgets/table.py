@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 import pandas as pd
@@ -9,6 +10,7 @@ from textual.widgets import DataTable, Label
 
 from ecstacy.core import registry
 from ecstacy.core.dataset import DataSet
+from ecstacy.util.fmt import fmt_value
 from ecstacy.widgets.base import ColumnMapping
 
 if TYPE_CHECKING:
@@ -202,16 +204,9 @@ class TableView(Vertical):
         hidden = set(self._hidden_columns)
 
         def _work() -> None:
-            work = frame
-            if search:
-                needle = search.lower()
-                mask = pd.Series(False, index=frame.index)
-                for col in frame.columns:
-                    if str(col) in hidden:
-                        continue
-                    col_str = self._string_col_cached(str(col))
-                    mask = mask | col_str.str.contains(needle, na=False, regex=False)
-                work = frame[mask]
+            work = filter_frame(
+                frame, search, hidden=hidden, string_col=self._string_col_cached
+            )
             filtered_count = len(work)
             work = sort_frame_multi(work, sort_cols)
             all_columns = [str(c) for c in frame.columns]
@@ -279,9 +274,8 @@ class TableView(Vertical):
         if not (0 <= index < len(visible_columns)):
             return
         col = visible_columns[index]
-        existing = [(c, a) for c, a in self._sort_cols if c == col]
-        if existing:
-            idx = self._sort_cols.index(existing[0])
+        idx = next((i for i, (c, _) in enumerate(self._sort_cols) if c == col), None)
+        if idx is not None:
             self._sort_cols[idx] = (col, not self._sort_cols[idx][1])
         else:
             self._sort_cols.append((col, True))
@@ -297,19 +291,9 @@ class TableView(Vertical):
         return self._string_cols[col]
 
     def _filter_cached(self, frame: pd.DataFrame, search: str) -> pd.DataFrame:
-        if not search:
-            return frame
-        needle = search.lower()
-        mask = pd.Series(False, index=frame.index)
-        for col in frame.columns:
-            if str(col) in self._hidden_columns:
-                continue
-            col_str = self._string_col_cached(str(col))
-            col_mask = col_str.str.contains(needle, na=False, regex=False)
-            if not col_mask.index.equals(frame.index):
-                col_mask = col_mask.reindex(frame.index, fill_value=False)
-            mask = mask | col_mask
-        return frame[mask]
+        return filter_frame(
+            frame, search, hidden=self._hidden_columns, string_col=self._string_col_cached
+        )
 
     def _populate(self, search: str = "") -> None:
         # Bump generation to invalidate any in-flight populate worker, then
@@ -342,7 +326,7 @@ class TableView(Vertical):
             return
         slc = self._full_view.iloc[self._loaded_count:end]
         rows = [
-            [_fmt(value) for value in row]
+            [fmt_value(value) for value in row]
             for row in slc[visible_columns].itertuples(index=False, name=None)
         ]
         if rows:
@@ -410,25 +394,28 @@ def sort_frame_multi(
         return frame
 
 
-def filter_frame(frame: pd.DataFrame, search: str) -> pd.DataFrame:
+def filter_frame(
+    frame: pd.DataFrame,
+    search: str,
+    *,
+    hidden: set[str] | None = None,
+    string_col: Callable[[str], pd.Series] | None = None,
+) -> pd.DataFrame:
     if not search:
         return frame
     needle = search.lower()
+    hidden = hidden or set()
     mask = pd.Series(False, index=frame.index)
     for col in frame.columns:
-        col_mask = frame[col].astype(str).str.lower().str.contains(
-            needle, na=False, regex=False
-        )
+        col_str_name = str(col)
+        if col_str_name in hidden:
+            continue
+        if string_col is not None:
+            col_str = string_col(col_str_name)
+        else:
+            col_str = frame[col].astype(str).str.lower()
+        col_mask = col_str.str.contains(needle, na=False, regex=False)
+        if not col_mask.index.equals(frame.index):
+            col_mask = col_mask.reindex(frame.index, fill_value=False)
         mask = mask | col_mask
     return frame[mask]
-
-
-def _fmt(value: object) -> str:
-    if value is None:
-        return ""
-    try:
-        if pd.isna(value):
-            return ""
-    except (TypeError, ValueError):
-        pass
-    return str(value)

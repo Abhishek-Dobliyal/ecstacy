@@ -10,8 +10,10 @@ from ecstacy.cli._options import (
     _export_option,
     _head_option,
     _max_rows_option,
+    _no_splash_option,
     _refresh_option,
     _tail_option,
+    _theme_option,
 )
 from ecstacy.cli.headless import _is_headless, _run_headless
 from ecstacy.config.loader import (
@@ -55,6 +57,20 @@ def _launch(
     ).run()
 
 
+def _apply_max_rows(spec: SourceSpec, max_rows: int | None) -> None:
+    if max_rows is not None:
+        spec.params["max_rows"] = max_rows
+
+
+def _maybe_headless(
+    spec: SourceSpec, head: int | None, tail: int | None, export: str | None
+) -> bool:
+    if _is_headless(head, tail, export):
+        _run_headless(spec, head, tail, export)
+        return True
+    return False
+
+
 @app.callback(invoke_without_command=True)
 def default(
     ctx: typer.Context,
@@ -73,21 +89,19 @@ def default(
 def open(  # noqa: A001
     target: str = typer.Argument(..., help="File path or http(s) URL"),
     chart: str = typer.Option("table", "--chart", help="Initial visualization"),
-    theme: str | None = typer.Option(None, "--theme"),
+    theme: str | None = _theme_option(),
     max_rows: int | None = _max_rows_option(),
     refresh: str | None = _refresh_option(),
     head: int | None = _head_option(),
     tail: int | None = _tail_option(),
     export: str | None = _export_option(),
-    no_splash: bool = typer.Option(True, "--no-splash/--splash"),
+    no_splash: bool = _no_splash_option(),
 ) -> None:
     from ecstacy.app import spec_from_target
 
     spec = spec_from_target(target)
-    if max_rows is not None:
-        spec.params["max_rows"] = max_rows
-    if _is_headless(head, tail, export):
-        _run_headless(spec, head, tail, export)
+    _apply_max_rows(spec, max_rows)
+    if _maybe_headless(spec, head, tail, export):
         return
     _launch(
         open_spec=spec,
@@ -109,13 +123,13 @@ def file(
     value: str | None = typer.Option(None, "--value", help="Value column (bar/histogram)"),
     fmt: str | None = typer.Option(None, "--format", help="Override file format"),
     sheet: str | None = typer.Option(None, "--sheet", help="Excel sheet name"),
-    theme: str | None = typer.Option(None, "--theme"),
+    theme: str | None = _theme_option(),
     max_rows: int | None = _max_rows_option(),
     refresh: str | None = _refresh_option(),
     head: int | None = _head_option(),
     tail: int | None = _tail_option(),
     export: str | None = _export_option(),
-    no_splash: bool = typer.Option(True, "--no-splash/--splash"),
+    no_splash: bool = _no_splash_option(),
 ) -> None:
     params: dict = {"path": str(Path(path).expanduser()) if path != "-" else "-"}
     if fmt:
@@ -125,8 +139,7 @@ def file(
     if max_rows is not None:
         params["max_rows"] = max_rows
     spec = SourceSpec(kind="file", id=Path(path).name, params=params)
-    if _is_headless(head, tail, export):
-        _run_headless(spec, head, tail, export)
+    if _maybe_headless(spec, head, tail, export):
         return
     mapping = (
         ColumnMapping(x=x, y=list(y) if y else [], category=category, value=value)
@@ -150,20 +163,19 @@ def rest(
     json_path: str | None = typer.Option(None, "--json-path", help="Dotted path to records"),
     method: str = typer.Option("GET", "--method"),
     chart: str = typer.Option("table", "--chart"),
-    theme: str | None = typer.Option(None, "--theme"),
+    theme: str | None = _theme_option(),
     max_rows: int | None = _max_rows_option(),
     refresh: str | None = _refresh_option(),
     head: int | None = _head_option(),
     tail: int | None = _tail_option(),
     export: str | None = _export_option(),
-    no_splash: bool = typer.Option(True, "--no-splash/--splash"),
+    no_splash: bool = _no_splash_option(),
 ) -> None:
     params: dict[str, Any] = {"url": url, "method": method, "json_path": json_path}
     if max_rows is not None:
         params["max_rows"] = max_rows
     spec = SourceSpec(kind="rest", id=url, params=params)
-    if _is_headless(head, tail, export):
-        _run_headless(spec, head, tail, export)
+    if _maybe_headless(spec, head, tail, export):
         return
     _launch(
         open_spec=spec,
@@ -181,18 +193,16 @@ def sql(
     db: str = typer.Option(":memory:", "--db", help="DuckDB file or :memory:"),
     chart: str = typer.Option("table", "--chart"),
     max_rows: int | None = _max_rows_option(),
-    theme: str | None = typer.Option(None, "--theme"),
+    theme: str | None = _theme_option(),
     refresh: str | None = _refresh_option(),
     head: int | None = _head_option(),
     tail: int | None = _tail_option(),
     export: str | None = _export_option(),
-    no_splash: bool = typer.Option(True, "--no-splash/--splash"),
+    no_splash: bool = _no_splash_option(),
 ) -> None:
     spec = SourceSpec(kind="sql", id="sql", params={"query": query, "db": db})
-    if max_rows is not None:
-        spec.params["max_rows"] = max_rows
-    if _is_headless(head, tail, export):
-        _run_headless(spec, head, tail, export)
+    _apply_max_rows(spec, max_rows)
+    if _maybe_headless(spec, head, tail, export):
         return
     _launch(open_spec=spec, viz=chart, theme=theme, refresh=refresh, no_splash=no_splash)
 
@@ -203,20 +213,18 @@ def sqlite(
     db: str = typer.Option(":memory:", "--db", help="SQLite file or :memory:"),
     chart: str = typer.Option("table", "--chart"),
     max_rows: int | None = _max_rows_option(),
-    theme: str | None = typer.Option(None, "--theme"),
+    theme: str | None = _theme_option(),
     refresh: str | None = _refresh_option(),
     head: int | None = _head_option(),
     tail: int | None = _tail_option(),
     export: str | None = _export_option(),
-    no_splash: bool = typer.Option(True, "--no-splash/--splash"),
+    no_splash: bool = _no_splash_option(),
 ) -> None:
     spec = SourceSpec(
         kind="sqlite", id="sqlite", params={"query": query, "db": db}
     )
-    if max_rows is not None:
-        spec.params["max_rows"] = max_rows
-    if _is_headless(head, tail, export):
-        _run_headless(spec, head, tail, export)
+    _apply_max_rows(spec, max_rows)
+    if _maybe_headless(spec, head, tail, export):
         return
     _launch(
         open_spec=spec, viz=chart, theme=theme, refresh=refresh,
@@ -230,19 +238,18 @@ def socket(
     chart: str = typer.Option("table", "--chart"),
     max_messages: int = typer.Option(100, "--max-messages", help="Max messages to collect"),
     timeout: float = typer.Option(5.0, "--timeout", help="Receive timeout in seconds"),
-    theme: str | None = typer.Option(None, "--theme"),
+    theme: str | None = _theme_option(),
     head: int | None = _head_option(),
     tail: int | None = _tail_option(),
     export: str | None = _export_option(),
-    no_splash: bool = typer.Option(True, "--no-splash/--splash"),
+    no_splash: bool = _no_splash_option(),
 ) -> None:
     spec = SourceSpec(
         kind="socket",
         id=url,
         params={"url": url, "max_messages": max_messages, "timeout": timeout},
     )
-    if _is_headless(head, tail, export):
-        _run_headless(spec, head, tail, export)
+    if _maybe_headless(spec, head, tail, export):
         return
     _launch(open_spec=spec, viz=chart, theme=theme, no_splash=no_splash)
 
@@ -250,9 +257,9 @@ def socket(
 @app.command()
 def dashboard(
     path: str = typer.Argument(..., help="Dashboard YAML file"),
-    theme: str | None = typer.Option(None, "--theme"),
+    theme: str | None = _theme_option(),
     max_rows: int | None = _max_rows_option(),
-    no_splash: bool = typer.Option(True, "--no-splash/--splash"),
+    no_splash: bool = _no_splash_option(),
 ) -> None:
     try:
         config = load_dashboard(path)

@@ -7,6 +7,8 @@ from textual.widgets import Footer, Header, Label, ListItem, ListView, Static
 
 from ecstacy import APP_NAME
 from ecstacy.core import registry
+from ecstacy.screens.help import HelpScreen
+from ecstacy.screens.modals import OpenScreen
 from ecstacy.widgets import viz_names
 
 _QUICK_ITEMS = [
@@ -179,16 +181,10 @@ class HomeScreen(Screen):
         self.notify("recents refreshed")
 
     def action_open(self) -> None:
-        from ecstacy.screens.modals import OpenScreen
-
         self.app.push_screen(OpenScreen())
 
     def action_dashboard(self) -> None:
-        from ecstacy.screens.modals import OpenScreen
-
         self.app.push_screen(OpenScreen(dashboard=True))
 
     def action_help(self) -> None:
-        from ecstacy.screens.help import HelpScreen
-
         self.app.push_screen(HelpScreen())

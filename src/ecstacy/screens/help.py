@@ -65,6 +65,3 @@ class HelpScreen(ModalScreen):
     def compose(self) -> ComposeResult:
         with Vertical(id="help-box"):
             yield Static(_HELP, markup=True)
-
-    def action_dismiss(self, result: object = None) -> None:  # type: ignore[override]
-        self.dismiss()

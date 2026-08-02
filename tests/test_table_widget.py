@@ -234,13 +234,13 @@ async def test_set_data_skips_repopulate_on_identical_frame():
 
 
 def test_fmt_blanks_nan_and_nat():
-    from ecstacy.widgets.table import _fmt
+    from ecstacy.util.fmt import fmt_value
 
-    assert _fmt(float("nan")) == ""
-    assert _fmt(pd.NaT) == ""
-    assert _fmt(pd.NA) == ""
-    assert _fmt("x") == "x"
-    assert _fmt(12.5) == "12.5"
+    assert fmt_value(float("nan")) == ""
+    assert fmt_value(pd.NaT) == ""
+    assert fmt_value(pd.NA) == ""
+    assert fmt_value("x") == "x"
+    assert fmt_value(12.5) == "12.5"
 
 
 def test_footer_text_shows_display_cap():

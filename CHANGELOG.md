@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.4] - 2026-08-02
+
+### Changed
+- Dead-code cleanup: removed 3 shadowed duplicate modules (`cli.py`, `screens/modals.py`, `widgets/charts.py`) that were unreachable behind their package `__init__.py` counterparts.
+- Removed dead `Registry.reset()`/`isolated()` methods, dead `_paint_gen` state in `PlotWidget`, no-op `CancelledError` re-raise handlers, and redundant `action_dismiss` override in `HelpScreen`.
+- `orjson` is now a top-level import in `socket.py` and used directly in `_parse_message` instead of being lazy-imported and passed as a module parameter.
+- Hoisted 12 function-local imports to module top (only `websockets` stays deferred — optional dependency — and `EcstacyApp` in CLI — startup latency).
+- Eliminated full `DataFrame.copy()` in `_resample` (shallow `assign` instead); replaced `dropna()` copy with `notna().sum()` + `nunique()` in `_diet_dtypes`; in-place column updates instead of `frame.assign` copy.
+- Removed redundant double `deduplicate_columns` on every file load (kept the `from_dataframe` chokepoint only).
+- Socket streaming uses list rebind instead of copy-then-clear, avoiding per-batch allocation.
+- Hoisted `sorted(_UNITS)` and `theme_names()` to module-level constants (hot paths: every chart open / config validation / theme toggle).
+- `PlotWidget.render()` computes the `(width, height, theme)` cache key once and passes it into `_ensure_build`, eliminating duplicate `_theme_name()` calls per repaint.
+- Precompiled 5 regexes in `transforms.py` (`_QUOTE_RE`, `_LONE_EQ_RE`, `_UNDEFINED_NAME_RE`, `_SQL_HINT_RE`, `_SQL_FROM_RE`).
+
+### Refactored
+- Extracted `_grouped_topn()` shared helper for bar/proportion chart `_prepare` (~30 lines deduplicated).
+- Resurrected `_theme_palette()` helper; `line.py` and `proportion.py` now call it instead of rebuilding the palette list inline.
+- Moved `_fmt()` to `ecstacy.util.fmt` as `fmt_value()`; shared by `json_tree.py` and `table.py`.
+- Added `_panel_has_transform()` helper in `dashboard.py` (replaces duplicated boolean expression in `_build_transformed`/`_apply_transform`).
+- CLI: added `_apply_max_rows()`, `_maybe_headless()`, `_theme_option()`, `_no_splash_option()` helpers; `--theme`/`--no-splash` now have consistent help text across all commands.
+- `headless.py` `_emit` uses a dispatch dict (`_EXPORT_DISPATCH`) whose keys drive `_EXPORT_FORMATS`, keeping them in sync automatically.
+- `config/schema.py`: str→list coercion for `y`/`group_by`/`select` now uses a loop; `validate_panel_sources` reuses the `seen` set instead of rebuilding `source_ids`.
+- Merged `action_focus_transform`/`action_focus_search` into a single `_focus_input(bar_id)` helper in `ChartScreen`.
+- `table.py`: `_filter_cached` and `_dispatch_populate` now delegate to the shared `filter_frame()` (tests kept valid); sort-column toggle uses `next()` instead of list-build + `index()`.
+
+### Removed
+- `widgets/__init__.py` `__all__`: dropped `ColumnMapping`, `auto_mapping`, `VIZ_ORDER` (unused re-exports).
+- `screens/__init__.py`: cleared unused re-exports.
+
 ## [0.12.3] - 2026-08-01
 
 ### Changed

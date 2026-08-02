@@ -8,6 +8,12 @@ import pandas as pd
 
 from ecstacy.core.dataset import EcstacyError
 
+_QUOTE_RE = re.compile(r"'[^']*'|\"[^\"]*\"")
+_LONE_EQ_RE = re.compile(r"(?<![<>=!])=(?!=)")
+_UNDEFINED_NAME_RE = re.compile(r"name '([^']+)' is not defined")
+_SQL_HINT_RE = re.compile(r"(?i)^\s*(select|with)\b")
+_SQL_FROM_RE = re.compile(r"(?i)\bfrom\b")
+
 
 class TransformError(EcstacyError):
     """Raised when a transform cannot be applied."""
@@ -29,8 +35,8 @@ def _validate_transform_inputs(frame: pd.DataFrame, transform: Transform) -> Non
 
 def _validate_where_clause(clause: str) -> None:
     """Fail fast on a lone ``=`` outside quotes; pandas query only takes ``==``."""
-    unquoted = re.sub(r"'[^']*'|\"[^\"]*\"", "", clause)
-    if re.search(r"(?<![<>=!])=(?!=)", unquoted):
+    unquoted = _QUOTE_RE.sub("", clause)
+    if _LONE_EQ_RE.search(unquoted):
         raise TransformError(
             f"invalid where clause {clause!r}: use == to compare, "
             "and quote string values — e.g. region == 'US'"
@@ -40,7 +46,7 @@ def _validate_where_clause(clause: str) -> None:
 def _where_error(clause: str, exc: Exception) -> TransformError:
     """Enrich pandas query errors with hints for the common mistakes."""
     msg = f"invalid where clause {clause!r}: {exc}"
-    match = re.search(r"name '([^']+)' is not defined", str(exc))
+    match = _UNDEFINED_NAME_RE.search(str(exc))
     if match:
         msg += f" — quote string values, e.g. region == '{match.group(1)}'"
     return TransformError(msg)
@@ -86,8 +92,8 @@ def _aggregate(frame: pd.DataFrame, group_by: list[str], agg: str) -> pd.DataFra
 
 
 def _resample(frame: pd.DataFrame, time_column: str, rule: str, agg: str) -> pd.DataFrame:
-    indexed = frame.copy()
-    indexed[time_column] = pd.to_datetime(indexed[time_column], errors="coerce")
+    times = pd.to_datetime(frame[time_column], errors="coerce")
+    indexed = frame.assign(**{time_column: times})
     indexed = indexed.dropna(subset=[time_column]).set_index(time_column)
     try:
         resampled = indexed.resample(rule).agg(agg, numeric_only=True)
@@ -110,7 +116,7 @@ def parse_transform_query(text: str) -> Transform:
 
     Example: "where value > 100 | group_by region | agg mean | limit 10"
     """
-    if re.match(r"(?i)^\s*(select|with)\b", text) and re.search(r"(?i)\bfrom\b", text):
+    if _SQL_HINT_RE.match(text) and _SQL_FROM_RE.search(text):
         raise TransformError(
             "the query bar uses a pipe DSL, not SQL — join clauses with |, "
             "example: where value > 100 | group_by region | agg mean | limit 10"

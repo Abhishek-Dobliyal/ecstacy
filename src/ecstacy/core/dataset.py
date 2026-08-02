@@ -140,10 +140,12 @@ def _diet_dtypes(frame: pd.DataFrame) -> pd.DataFrame:
                 changed = True
         elif pdt.is_object_dtype(series) or pdt.is_string_dtype(series):
             # Skip the cheap "is it all missing" case to avoid surprises.
-            non_null = series.dropna()
-            if len(non_null) > 0 and non_null.nunique() / len(non_null) < 0.5:
+            count = series.notna().sum()
+            if count > 0 and series.nunique() / count < 0.5:
                 new_cols[name] = series.astype("category")
                 changed = True
     if not changed:
         return frame
-    return frame.assign(**new_cols)
+    for name, series in new_cols.items():
+        frame[name] = series
+    return frame

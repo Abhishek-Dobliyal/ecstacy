@@ -4,6 +4,8 @@ import numpy as np
 import pandas as pd
 from pandas.api import types as pdt
 
+from ecstacy.widgets.base import ColumnMapping
+
 MAX_CHART_POINTS = 1000
 
 
@@ -88,9 +90,52 @@ def _heat_colors(values: list[float], theme) -> list[tuple[int, int, int]]:
     return [_heat_color(v, mx, theme) for v in values]
 
 
-def _theme_palette(app) -> list[str]:
-    t = app.current_theme
-    return [t.primary, t.accent, t.secondary]
+def _theme_palette(theme) -> list[str]:
+    return [theme.primary, theme.accent, theme.secondary]
+
+
+def _grouped_topn(
+    frame: pd.DataFrame,
+    mapping: ColumnMapping,
+    *,
+    top_n: int,
+    kind_label: str,
+    prefer_value: bool = False,
+) -> tuple[list[str], list[float], str, str | None, str, str] | str:
+    """Shared prepare logic for bar/proportion charts.
+
+    Returns ``(labels, values, title, note, category, value)`` on success,
+    or an error message string when the mapping is invalid or the frame
+    has no data.
+    """
+    category = mapping.category or mapping.x
+    if prefer_value:
+        value = mapping.value or (mapping.y[0] if mapping.y else None)
+    else:
+        value = mapping.y[0] if mapping.y else mapping.value
+    if not category:
+        cats = _category_columns(frame)
+        category = cats[0] if cats else None
+    if not value:
+        nums = _numeric_columns(frame)
+        value = nums[0] if nums else None
+    if not category or not value:
+        return f"{kind_label} needs a category and a numeric column"
+    if category == value:
+        return f"{kind_label} needs distinct category and value columns"
+    work = frame[[category, value]].copy()
+    work[value] = pd.to_numeric(work[value], errors="coerce")
+    work = work.dropna(subset=[category, value])
+    if work.empty:
+        return f"{kind_label} has no data after removing NaNs"
+    grouped = (
+        work.groupby(category)[value].sum().sort_values(ascending=False).head(top_n)
+    )
+    labels = [str(i) for i in grouped.index]
+    total_cats = work[category].nunique()
+    note = f"top {len(grouped)} of {total_cats} categories" if len(grouped) < total_cats else None
+    title = f"{value} by {category}"
+    return labels, grouped.tolist(), title, note, category, value
 
 
 def _decorate(plt, title: str, xlabel: str | None = None, ylabel: str | None = None) -> None:

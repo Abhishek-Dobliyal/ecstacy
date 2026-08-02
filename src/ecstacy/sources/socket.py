@@ -4,6 +4,7 @@ import asyncio
 from collections.abc import AsyncIterator, Callable
 from typing import Any
 
+import orjson
 import pandas as pd
 
 from ecstacy.core import registry
@@ -65,7 +66,6 @@ class SocketSource(StreamableSource):
         keep_raw: bool = False,
         on_status: Callable[[str], None] | None = None,
     ) -> AsyncIterator[DataSet]:
-        import orjson
         import websockets
 
         attempts = 0
@@ -87,21 +87,21 @@ class SocketSource(StreamableSource):
                                     _records_to_frame(records),
                                     source_id=self.id,
                                     kind=self.kind,
-                                    raw=list(records) if keep_raw else None,
+                                    raw=records if keep_raw else None,
                                 )
-                                records.clear()
+                                records = []
                             continue
                         except websockets.ConnectionClosed:
                             break  # drop to reconnect logic below
-                        records.append(_parse_message(raw, orjson))
+                        records.append(_parse_message(raw))
                         if len(records) >= self.max_messages:
                             yield DataSet.from_dataframe(
                                 _records_to_frame(records),
                                 source_id=self.id,
                                 kind=self.kind,
-                                raw=list(records) if keep_raw else None,
+                                raw=records if keep_raw else None,
                             )
-                            records.clear()
+                            records = []
                 # Clean close of the connection: reconnect if enabled.
                 if not self.reconnect:
                     return
@@ -109,9 +109,6 @@ class SocketSource(StreamableSource):
                 if on_status:
                     on_status(f"reconnecting in {delay:.0f}s")
                 await asyncio.sleep(delay)
-                continue
-            except asyncio.CancelledError:
-                raise  # never retry on cancellation
             except Exception as exc:
                 if not self.reconnect:
                     raise SourceError(
@@ -135,10 +132,8 @@ class SocketSource(StreamableSource):
                         f"reconnecting in {delay:.0f}s (attempt {attempts})"
                     )
                 await asyncio.sleep(delay)
-                continue
 
     async def _collect(self) -> list[Any]:
-        import orjson
         import websockets
 
         records: list[Any] = []
@@ -150,11 +145,11 @@ class SocketSource(StreamableSource):
                     break
                 except websockets.ConnectionClosed:
                     break
-                records.append(_parse_message(raw, orjson))
+                records.append(_parse_message(raw))
         return records
 
 
-def _parse_message(raw: Any, orjson) -> Any:
+def _parse_message(raw: Any) -> Any:
     if isinstance(raw, (bytes, bytearray)):
         try:
             return orjson.loads(raw)

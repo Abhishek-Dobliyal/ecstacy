@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from collections.abc import Callable
 
 from ecstacy.core.dataset import DataSet
@@ -41,8 +40,6 @@ async def consume_stream(
             if not is_active():
                 continue
             on_data(dataset)
-    except asyncio.CancelledError:
-        raise
     except Exception as error:
         on_error(error)
     finally:

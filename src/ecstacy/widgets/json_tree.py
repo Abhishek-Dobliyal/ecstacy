@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+from itertools import islice
 from typing import Any
 
-import pandas as pd
 from textual.widgets import Tree
 
 from ecstacy.core import registry
 from ecstacy.core.dataset import DataSet
+from ecstacy.util.fmt import fmt_value
 from ecstacy.widgets.base import ColumnMapping
 
 _MAX_ITEMS = 200
@@ -53,27 +54,16 @@ def _add(node, data: Any, depth: int = 0) -> None:
         node.add_leaf("…")
         return
     if isinstance(data, dict):
-        for key, value in list(data.items())[:_MAX_ITEMS]:
+        for key, value in islice(data.items(), _MAX_ITEMS):
             if isinstance(value, (dict, list)):
                 _add(node.add(str(key)), value, depth + 1)
             else:
-                node.add_leaf(f"{key}: {_fmt(value)}")
+                node.add_leaf(f"{key}: {fmt_value(value)}")
     elif isinstance(data, list):
-        for index, item in enumerate(data[:_MAX_ITEMS]):
+        for index, item in islice(enumerate(data), _MAX_ITEMS):
             if isinstance(item, (dict, list)):
                 _add(node.add(f"[{index}]"), item, depth + 1)
             else:
-                node.add_leaf(f"[{index}] {_fmt(item)}")
+                node.add_leaf(f"[{index}] {fmt_value(item)}")
     else:
-        node.add_leaf(_fmt(data))
-
-
-def _fmt(value: Any) -> str:
-    if value is None:
-        return ""
-    try:
-        if pd.isna(value):
-            return ""
-    except (TypeError, ValueError):
-        pass
-    return str(value)
+        node.add_leaf(fmt_value(data))
