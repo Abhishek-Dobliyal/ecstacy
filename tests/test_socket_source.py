@@ -103,9 +103,7 @@ def test_socket_source_invalid_url_raises():
         create_source(spec).fetch()
 
 
-# -----------------------------------------------------------------------
 # Reconnection with exponential backoff (P1.2)
-# -----------------------------------------------------------------------
 
 @pytest.mark.asyncio
 async def test_stream_reconnects_after_drop():

@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] - 2026-08-02
+
+### Added
+- Three new dark themes: `onedark` (Atom One Dark), `darcula` (JetBrains Darcula), `synthwave` (Synthwave '84). Five themes total.
+- Theme picker modal (`ThemePickerScreen`): press `t` to open a list view with color swatches; enter to select, esc to cancel. Replaces the old `t` cycle-to-next behavior.
+- `theme_entries()` helper in `ecstacy.theming` returning `[(name, primary_hex), ...]` for picker swatches.
+
+### Changed
+- `action_toggle_theme` renamed to `action_pick_theme` in `EcstacyApp`; bindings updated in home, chart, and dashboard screens.
+- Help text updated: "toggle theme" → "pick theme" across all screens.
+- README: added a Themes section listing all five theme names; keys section says "pick theme" instead of "theme".
+
 ## [0.12.4] - 2026-08-02
 
 ### Changed

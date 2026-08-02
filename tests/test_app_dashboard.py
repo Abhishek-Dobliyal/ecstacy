@@ -130,9 +130,7 @@ async def test_late_open_does_not_push_chart(monkeypatch):
         assert not isinstance(app.screen, ChartScreen)
 
 
-# -----------------------------------------------------------------------
 # Progressive loading
-# -----------------------------------------------------------------------
 
 def _write_large_csv(tmp_path, rows: int = 5000):
     import pandas as pd
@@ -236,9 +234,7 @@ async def test_progressive_update_dropped_if_user_navigated_away(tmp_path):
         assert not isinstance(app.screen, ChartScreen)
 
 
-# -----------------------------------------------------------------------
 # Dashboard streaming (item 7)
-# -----------------------------------------------------------------------
 
 @pytest.mark.asyncio
 async def test_dashboard_stream_updates_panels(monkeypatch):
@@ -374,9 +370,7 @@ class _RealSource:
         return self._real.id
 
 
-# -----------------------------------------------------------------------
 # Dashboard per-panel transform cache (item 32)
-# -----------------------------------------------------------------------
 
 @pytest.mark.asyncio
 async def test_panel_cache_hits_on_same_dataset():

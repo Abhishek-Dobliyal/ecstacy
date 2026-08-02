@@ -371,9 +371,7 @@ async def test_column_picker_enter_toggles_first_item_immediately():
         assert col_names == ["b"]
 
 
-# -----------------------------------------------------------------------
 # Table virtualization (item 23b)
-# -----------------------------------------------------------------------
 
 @pytest.mark.asyncio
 async def test_table_loads_first_page_only():
@@ -495,9 +493,7 @@ async def test_search_clears_old_rows():
         assert table.row_count <= initial_row_count
 
 
-# -----------------------------------------------------------------------
 # Offloaded populate (P1.1): filter+sort run on a worker thread
-# -----------------------------------------------------------------------
 
 @pytest.mark.asyncio
 async def test_populate_offloads_to_worker():
@@ -622,9 +618,7 @@ async def test_populate_empty_frame_clears_synchronously():
         assert tv._rendered_columns == ()
 
 
-# -----------------------------------------------------------------------
 # Cursor preservation across async rebuild (multi-column sort fix)
-# -----------------------------------------------------------------------
 
 @pytest.mark.asyncio
 async def test_populate_preserves_cursor_column():

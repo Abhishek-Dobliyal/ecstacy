@@ -198,9 +198,7 @@ def test_load_dashboard_missing_file():
         load_dashboard("/does/not/exist.yaml")
 
 
-# -----------------------------------------------------------------------
 # Single-panel pooling: n/p cycles reuse widgets instead of rebuilding
-# -----------------------------------------------------------------------
 
 
 async def _settle(pilot, rounds: int = 8) -> None:

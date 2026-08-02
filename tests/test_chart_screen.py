@@ -469,9 +469,7 @@ async def test_dashboard_render_leaves_focus_clear():
         assert screen.focused is None
 
 
-# -----------------------------------------------------------------------
 # Chart column picker (item 31)
-# -----------------------------------------------------------------------
 
 @pytest.mark.asyncio
 async def test_column_picker_not_available_for_heatmap():

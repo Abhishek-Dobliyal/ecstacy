@@ -339,9 +339,7 @@ def test_category_columns_finds_pandas3_string_columns():
     assert charts._category_columns(frame) == ["region"]
 
 
-# -----------------------------------------------------------------------
 # LTTB downsampling
-# -----------------------------------------------------------------------
 
 def test_lttb_preserves_extremes():
     """LTTB retains a spike that tail() would drop."""
@@ -380,9 +378,54 @@ def test_lttb_preserves_endpoints():
     assert sy[-1] == y[-1]
 
 
-# -----------------------------------------------------------------------
-# Chart data notes
-# -----------------------------------------------------------------------
+def test_lttb_threshold_below_3():
+    x = np.arange(100, dtype=float)
+    y = np.arange(100, dtype=float)
+    sx, sy = charts._lttb(x, y, 2)
+    assert len(sx) == 100
+    assert list(sx) == list(x)
+
+
+def test_lttb_exact_fit():
+    x = np.arange(50, dtype=float)
+    y = np.arange(50, dtype=float)
+    sx, sy = charts._lttb(x, y, 50)
+    assert len(sx) == 50
+
+
+def test_lttb_empty_bucket_fallback():
+    x = np.array([0.0, 1, 2, 10, 11, 12])
+    y = np.array([0.0, 1, 2, 10, 11, 12])
+    sx, sy = charts._lttb(x, y, 4)
+    assert len(sx) == 4
+    assert sx[0] == 0.0
+    assert sx[-1] == 12.0
+
+
+def test_lttb_monotonic_x_preserved():
+    x = np.arange(500, dtype=float)
+    y = np.sin(x / 50)
+    sx, _ = charts._lttb(x, y, 100)
+    diffs = np.diff(sx)
+    assert (diffs > 0).all()
+
+
+def test_lttb_nan_y_no_crash():
+    x = np.arange(100, dtype=float)
+    y = np.arange(100, dtype=float)
+    y[50] = np.nan
+    sx, sy = charts._lttb(x, y, 20)
+    assert len(sx) == 20
+
+
+def test_lttb_preserves_endpoints_exact():
+    x = np.linspace(0, 100, 200)
+    y = np.cos(x)
+    sx, sy = charts._lttb(x, y, 30)
+    assert sx[0] == x[0]
+    assert sy[0] == y[0]
+    assert sx[-1] == x[-1]
+    assert sy[-1] == y[-1]
 
 def test_line_chart_note_when_downsampled():
     frame = pd.DataFrame({"x": range(1000), "y": range(1000)})
