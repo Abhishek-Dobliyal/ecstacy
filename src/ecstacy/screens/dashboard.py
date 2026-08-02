@@ -89,7 +89,7 @@ class DashboardScreen(Screen):
         ("p", "prev_panel", "Prev panel"),
         ("left", "prev_panel", "Prev panel"),
         ("r", "refresh", "Refresh now"),
-        ("t", "app.toggle_theme", "Theme"),
+        ("t", "app.pick_theme", "Theme"),
         ("escape", "app.pop_screen", "Back"),
     ]
 

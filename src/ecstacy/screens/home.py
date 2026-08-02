@@ -14,7 +14,7 @@ from ecstacy.widgets import viz_names
 _QUICK_ITEMS = [
     ("q-open", "o", "open a file or URL"),
     ("q-dashboard", "d", "open a dashboard YAML"),
-    ("q-theme", "t", "toggle theme"),
+    ("q-theme", "t", "pick theme"),
     ("q-help", "?", "help"),
     ("q-quit", "q", "quit"),
 ]
@@ -47,7 +47,7 @@ class HomeScreen(Screen):
     BINDINGS = [
         ("o", "open", "Open"),
         ("d", "dashboard", "Dashboard"),
-        ("t", "app.toggle_theme", "Theme"),
+        ("t", "app.pick_theme", "Theme"),
         ("question_mark", "help", "Help"),
         ("r", "refresh", "Refresh"),
         ("q", "app.quit", "Quit"),
@@ -155,7 +155,7 @@ class HomeScreen(Screen):
         actions = {
             "q-open": self.action_open,
             "q-dashboard": self.action_dashboard,
-            "q-theme": self.app.action_toggle_theme,  # type: ignore[attr-defined]
+            "q-theme": self.app.action_pick_theme,  # type: ignore[attr-defined]
             "q-help": self.action_help,
             "q-quit": self.app.exit,
         }

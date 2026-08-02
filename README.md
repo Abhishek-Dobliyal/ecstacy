@@ -168,10 +168,20 @@ chart (horizontal bars, formerly `pie`), summary card
 
 ## Keys
 
-Home: `o` open, `d` dashboard, `t` theme, `?` help, `q` quit.
-Chart: `n`/`right` next chart, `p`/`left` previous chart, `ctrl+f` query/transform, `r` refresh, `t` theme, `esc` back.
+Home: `o` open, `d` dashboard, `t` pick theme, `?` help, `q` quit.
+Chart: `n`/`right` next chart, `p`/`left` previous chart, `ctrl+f` query/transform, `r` refresh, `t` pick theme, `esc` back.
 Table: `s` sort by column, `/` focus search, `c` column picker, `e` export view, type to filter, `esc` clear.
 Dashboard: `m` toggle grid/single layout, `n`/`p` cycle panels, `r` refresh now, `esc` back.
+
+## Themes
+
+Five built-in themes: `ecstacy-dark` (default), `ecstacy-light`, `onedark`,
+`darcula`, `synthwave`. Press `t` to open the theme picker, or set one in
+`config.yaml`:
+
+```yaml
+theme: synthwave
+```
 
 ## Configuration
 

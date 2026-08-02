@@ -59,7 +59,7 @@ class ChartScreen(Screen):
         ("ctrl+f", "focus_transform", "Query"),
         ("slash", "focus_search", "Search"),
         ("c", "column_picker", "Columns"),
-        ("t", "app.toggle_theme", "Theme"),
+        ("t", "app.pick_theme", "Theme"),
         ("escape", "escape", "Back"),
     ]
 

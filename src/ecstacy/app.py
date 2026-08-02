@@ -11,9 +11,10 @@ from ecstacy.core.dataset import DataSet
 from ecstacy.screens.chart import ChartScreen
 from ecstacy.screens.dashboard import DashboardScreen
 from ecstacy.screens.home import HomeScreen
+from ecstacy.screens.modals import ThemePickerScreen
 from ecstacy.screens.splash import SplashScreen
 from ecstacy.sources.base import Source, SourceError, SourceSpec, create_source
-from ecstacy.theming import register_themes, theme_names
+from ecstacy.theming import register_themes, theme_entries
 from ecstacy.util.timeparse import parse_duration
 from ecstacy.widgets import resolve_viz
 from ecstacy.widgets.base import ColumnMapping
@@ -59,14 +60,17 @@ class EcstacyApp(App):
         elif self.config.splash and self._show_splash:
             self.push_screen(SplashScreen())
 
-    def action_toggle_theme(self) -> None:
-        names = theme_names()
-        try:
-            index = names.index(self.theme)
-        except ValueError:
-            index = -1
-        self.theme = names[(index + 1) % len(names)]
-        self.notify(f"theme: {self.theme}")
+    def action_pick_theme(self) -> None:
+        self.push_screen(
+            ThemePickerScreen(theme_entries(), self.theme),
+            self._on_theme_picked,
+        )
+
+    def _on_theme_picked(self, result: str | None) -> None:
+        if result is None or result == self.theme:
+            return
+        self.theme = result
+        self.notify(f"theme: {result}")
 
     def open_path(self, text: str, viz: str = "table") -> None:
         self.open_source(spec_from_target(text), viz)
