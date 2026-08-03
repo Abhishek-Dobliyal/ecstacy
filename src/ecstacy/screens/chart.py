@@ -13,7 +13,7 @@ from ecstacy.core.dataset import DataSet
 from ecstacy.core.scheduler import Job, Scheduler
 from ecstacy.core.stream import close_source, consume_stream
 from ecstacy.core.transforms import TransformError, parse_transform_query
-from ecstacy.screens.modals import VIZ_NO_MAPPING, ChartMappingScreen
+from ecstacy.screens.modals import VIZ_NO_MAPPING, ChartMappingScreen, ExportScreen
 from ecstacy.sources.base import Source, SourceError, SourceSpec, StreamableSource, create_source
 from ecstacy.widgets import create_viz, resolve_viz, viz_names
 from ecstacy.widgets.base import ColumnMapping, auto_mapping
@@ -59,6 +59,7 @@ class ChartScreen(Screen):
         ("ctrl+f", "focus_transform", "Query"),
         ("slash", "focus_search", "Search"),
         ("c", "column_picker", "Columns"),
+        ("e", "export_view", "Export"),
         ("t", "app.pick_theme", "Theme"),
         ("escape", "escape", "Back"),
     ]
@@ -158,6 +159,48 @@ class ChartScreen(Screen):
             self._active_widget.set_data(dataset, self.mapping)  # type: ignore[attr-defined]
         self._update_border(dataset)
 
+    def action_export_view(self) -> None:
+        widget = self._active_widget
+        if widget is not None and hasattr(widget, "action_export_view"):
+            widget.action_export_view()  # type: ignore[attr-defined]
+            return
+        self.app.push_screen(ExportScreen(), self._on_export_picked)
+
+    def _on_export_picked(self, result: tuple[str, str] | None) -> None:
+        if result is None:
+            return
+        path, fmt = result
+        self._export_frame(path, fmt)
+
+    def _export_frame(self, path: str, fmt: str) -> None:
+        if fmt not in ("csv", "json", "markdown"):
+            self.notify(f"unknown format: {fmt}", severity="error")
+            return
+        frame = self._get_transformed_dataset().frame
+
+        def _work() -> None:
+            try:
+                if fmt == "csv":
+                    frame.to_csv(path, index=False)
+                elif fmt == "json":
+                    frame.to_json(path, orient="records", indent=2, date_format="iso")
+                else:
+                    frame.to_markdown(path, index=False)
+            except Exception as exc:
+                self._notify_threadsafe(f"export failed: {exc}", error=True)
+                return
+            self._notify_threadsafe(f"exported {len(frame)} rows to {path}")
+
+        self.run_worker(_work, thread=True, exclusive=False, exit_on_error=False)
+
+    def _notify_threadsafe(self, message: str, error: bool = False) -> None:
+        try:
+            self.app.call_from_thread(
+                self.notify, message, severity="error" if error else "information"
+            )
+        except RuntimeError:
+            pass
+
     def action_escape(self) -> None:
         """Exit search/query input first; pop screen when no input is focused."""
         focused = self.focused
@@ -216,14 +259,14 @@ class ChartScreen(Screen):
         # data is already fresh from the initial fetch; don't refetch at t=0
         self._scheduler.add(self._job, run_immediately=False)
 
-    def _start_stream(self, source: Source, keep_raw: bool = False) -> None:
+    def _start_stream(self, source: StreamableSource, keep_raw: bool = False) -> None:
         self._stream_worker = self.run_worker(
             self._consume_stream(source, keep_raw=keep_raw),
             exclusive=True,
             exit_on_error=False,
         )
 
-    async def _consume_stream(self, source: Source, keep_raw: bool = False) -> None:
+    async def _consume_stream(self, source: StreamableSource, keep_raw: bool = False) -> None:
         await consume_stream(
             source=source,
             screen=self,

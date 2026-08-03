@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from ecstacy.core.dataset import DataSet
-from ecstacy.sources.base import Source
+from ecstacy.sources.base import StreamableSource
 
 
 def close_source(source: object) -> None:
@@ -14,7 +14,7 @@ def close_source(source: object) -> None:
 
 
 async def consume_stream(
-    source: Source,
+    source: StreamableSource,
     screen: object,
     on_data: Callable[[DataSet], None],
     on_error: Callable[[Exception], None],
@@ -34,15 +34,15 @@ async def consume_stream(
             if app is not None and notifier is not None:
                 app.call_from_thread(notifier, msg, severity="warning")
 
-    stream = source.stream(keep_raw=keep_raw, on_status=_on_status)  # type: ignore[assignment]
+    stream = source.stream(keep_raw=keep_raw, on_status=_on_status)
     try:
-        async for dataset in stream:  # type: ignore[attr-defined]
+        async for dataset in stream:
             if not is_active():
                 continue
             on_data(dataset)
     except Exception as error:
         on_error(error)
     finally:
-        await stream.aclose()  # type: ignore[attr-defined]
+        await stream.aclose()
         if on_done is not None:
             on_done()

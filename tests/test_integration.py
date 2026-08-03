@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+from textual.widgets import Input as _Input
 
 from ecstacy.core.dataset import DataSet
 from ecstacy.screens.modals.export import ExportScreen
@@ -130,3 +131,36 @@ async def test_viz_cycle_full_loop():
             await pilot.press("n")
             await pilot.pause(delay=0.05)
         assert screen.index == start_idx
+
+
+@pytest.mark.asyncio
+async def test_export_from_chart_screen(tmp_path):
+    from ecstacy.app import EcstacyApp
+    from ecstacy.config.loader import load_app_config
+
+    csv_path = _tmp_csv("a,b\n1,2\n3,4\n")
+    spec = SourceSpec(kind="file", id="test", params={"path": str(csv_path)})
+    app = EcstacyApp(load_app_config(), open_spec=spec, show_splash=False)
+    async with app.run_test() as pilot:
+        await app.workers.wait_for_complete()
+        for _ in range(10):
+            await pilot.pause()
+        await pilot.press("e")
+        await pilot.pause()
+        assert isinstance(app.screen, ExportScreen)
+        export_path = tmp_path / "out.csv"
+        path_input = app.screen.query_one("#export-path", _Input)
+        path_input.value = str(export_path)
+        await pilot.press("enter")
+        await pilot.pause()
+        fmt_input = app.screen.query_one("#export-fmt", _Input)
+        fmt_input.value = "csv"
+        await pilot.press("enter")
+        await pilot.pause()
+        await app.workers.wait_for_complete()
+        for _ in range(10):
+            await pilot.pause()
+        assert export_path.exists()
+        content = export_path.read_text()
+        assert "a,b" in content
+        assert "1,2" in content

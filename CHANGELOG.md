@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0] - 2026-08-03
+
+### Added
+- In-TUI export: press `e` on the chart screen to export the current view to CSV/JSON/Markdown. Table views export the filtered/sorted view; chart views export the underlying transformed DataFrame.
+- 6 new `_lttb` edge-case tests (threshold < 3, exact fit, empty bucket, monotonic x, NaN y, endpoint preservation).
+- Integration test for the export flow (press `e`, enter path + format, verify file written).
+
+### Fixed
+- **mypy now passes with zero errors** — `consume_stream` parameter type narrowed from `Source` to `StreamableSource`, removing 3 incorrect `type: ignore` comments. `StreamableSource.stream()` return type corrected from `AsyncIterator` to `AsyncGenerator` (enables `aclose()`). This unblocks CI which was red on every push.
+- `_heat_colors` now parses the 3 theme hex colors (`success`/`warning`/`error`) once instead of per-cell, eliminating N²×3 redundant string parses per heatmap paint.
+- `_lttb` vectorized: next-bucket averages precomputed via cumulative sums in a single pass, eliminating 2× `np.mean` calls per iteration. ~2-3× speedup for typical thresholds.
+- Small-terminal handling: `_budget()` floor lowered from 200 to 20 so narrow terminals render fewer points instead of overdrawing. Dashboard grid mode auto-falls back to single-panel when terminal width < 40; `m` key shows a warning instead of collapsing.
+
+### Changed
+- `Source.stream()` return type annotation: `AsyncIterator[DataSet]` → `AsyncGenerator[DataSet, None]` (matches actual async-generator behavior, enables `aclose()`).
+
 ## [0.13.0] - 2026-08-02
 
 ### Added

@@ -253,7 +253,7 @@ with a `set_data(dataset, mapping)` method and decorating it with
 
 ## Known limitations
 
-- Export is stdout-only (CSV/JSON/Markdown); no PNG/SVG yet.
+- Headless export is stdout-only (CSV/JSON/Markdown); in-TUI export writes to file. No PNG/SVG yet.
 - No clipboard, Prometheus, InfluxDB, or Google Sheets source yet.
 
 ## License

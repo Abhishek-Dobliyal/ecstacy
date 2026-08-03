@@ -173,7 +173,7 @@ class DashboardScreen(Screen):
             self._jobs.append(job)
             self._scheduler.add(job)
 
-    def _start_stream(self, source: Source, source_id: str, keep_raw: bool) -> None:
+    def _start_stream(self, source: StreamableSource, source_id: str, keep_raw: bool) -> None:
         # Seed with a one-shot fetch to avoid waiting for first stream batch.
         def _seed() -> None:
             try:
@@ -194,7 +194,7 @@ class DashboardScreen(Screen):
         self._stream_sources.add(source_id)
 
     async def _consume_stream(
-        self, source: Source, source_id: str, keep_raw: bool = False
+        self, source: StreamableSource, source_id: str, keep_raw: bool = False
     ) -> None:
         await consume_stream(
             source=source,
@@ -361,6 +361,8 @@ class DashboardScreen(Screen):
         if not self.dashboard.panels:
             await holder.mount(Label("dashboard has no panels"))
             return
+        if self._multi_panel and self.size.width < 40:
+            self._multi_panel = False
         if self._multi_panel:
             await self._render_multi(holder)
         else:
@@ -515,6 +517,9 @@ class DashboardScreen(Screen):
         return transform.apply(frame)
 
     async def action_toggle_layout(self) -> None:
+        if not self._multi_panel and self.size.width < 40:
+            self.notify("terminal too narrow for grid layout", severity="warning")
+            return
         self._multi_panel = not self._multi_panel
         await self._render_panels()
         self.notify("grid layout" if self._multi_panel else "single panel layout")

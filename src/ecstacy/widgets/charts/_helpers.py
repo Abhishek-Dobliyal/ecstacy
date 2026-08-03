@@ -86,8 +86,18 @@ def _heat_color(value: float, max_value: float, theme) -> tuple[int, int, int]:
 
 
 def _heat_colors(values: list[float], theme) -> list[tuple[int, int, int]]:
+    success = _hex_rgb(theme.success)
+    warning = _hex_rgb(theme.warning)
+    error = _hex_rgb(theme.error)
     mx = max(values) if values else 1.0
-    return [_heat_color(v, mx, theme) for v in values]
+    colors: list[tuple[int, int, int]] = []
+    for v in values:
+        ratio = max(0.0, min(1.0, v / mx)) if mx else 0.0
+        if ratio < 0.5:
+            colors.append(_lerp_rgb(success, warning, ratio * 2))
+        else:
+            colors.append(_lerp_rgb(warning, error, (ratio - 0.5) * 2))
+    return colors
 
 
 def _theme_palette(theme) -> list[str]:
@@ -158,38 +168,58 @@ def _lttb(
     out_y = np.empty(threshold)
     out_x[0] = x[0]
     out_y[0] = y[0]
+    out_x[-1] = x[-1]
+    out_y[-1] = y[-1]
     bucket_size = (n - 2) / (threshold - 2)
+
+    # Precompute bucket boundaries as integer arrays.
+    num_buckets = threshold - 2
+    starts = np.floor(np.arange(num_buckets) * bucket_size).astype(int) + 1
+    mids = np.floor(np.arange(1, num_buckets + 1) * bucket_size).astype(int) + 1
+    ends = np.minimum(
+        np.floor(np.arange(2, num_buckets + 2) * bucket_size).astype(int) + 1, n
+    )
+
+    # Precompute next-bucket averages via cumulative sums (one pass, no per-iteration np.mean).
+    cumsum_x = np.cumsum(x)
+    cumsum_y = np.cumsum(y)
+    avg_x = np.empty(num_buckets)
+    avg_y = np.empty(num_buckets)
+    for i in range(num_buckets):
+        c, d = mids[i], ends[i]
+        if c < d:
+            sx_prev = cumsum_x[c - 1] if c > 0 else 0.0
+            sy_prev = cumsum_y[c - 1] if c > 0 else 0.0
+            avg_x[i] = (cumsum_x[d - 1] - sx_prev) / (d - c)
+            avg_y[i] = (cumsum_y[d - 1] - sy_prev) / (d - c)
+        else:
+            avg_x[i] = float(x[-1])
+            avg_y[i] = float(y[-1])
+
     prev_x = float(x[0])
     prev_y = float(y[0])
-    for i in range(threshold - 2):
-        a = int(np.floor(i * bucket_size)) + 1
-        b = int(np.floor((i + 1) * bucket_size)) + 1
+    for i in range(num_buckets):
+        a, b = starts[i], mids[i]
         bx = x[a:b]
         by = y[a:b]
         if len(bx) == 0:
             out_x[i + 1] = prev_x
             out_y[i + 1] = prev_y
             continue
-        c = int(np.floor((i + 1) * bucket_size)) + 1
-        d = min(int(np.floor((i + 2) * bucket_size)) + 1, n)
-        if c < d:
-            avg_x = float(np.mean(x[c:d]))
-            avg_y = float(np.mean(y[c:d]))
-        else:
-            avg_x = float(x[-1])
-            avg_y = float(y[-1])
+        ax = avg_x[i]
+        ay = avg_y[i]
         areas = np.abs(
-            prev_x * (by - avg_y)
-            + bx * (avg_y - prev_y)
-            + avg_x * (prev_y - by)
+            prev_x * (by - ay)
+            + bx * (ay - prev_y)
+            + ax * (prev_y - by)
         )
         idx = int(np.argmax(areas))
-        out_x[i + 1] = float(bx[idx])
-        out_y[i + 1] = float(by[idx])
-        prev_x = float(bx[idx])
-        prev_y = float(by[idx])
-    out_x[-1] = x[-1]
-    out_y[-1] = y[-1]
+        val_x = float(bx[idx])
+        val_y = float(by[idx])
+        out_x[i + 1] = val_x
+        out_y[i + 1] = val_y
+        prev_x = val_x
+        prev_y = val_y
     return out_x, out_y
 
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncGenerator, Callable
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -50,7 +50,7 @@ class StreamableSource(Source):
         self,
         keep_raw: bool = False,
         on_status: Callable[[str], None] | None = None,
-    ) -> AsyncIterator[DataSet]:
+    ) -> AsyncGenerator[DataSet, None]:
         ...
 
 

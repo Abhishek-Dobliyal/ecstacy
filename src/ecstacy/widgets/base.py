@@ -123,11 +123,11 @@ class PlotWidget(PlotextPlot):
     # budget
 
     def _budget(self) -> int:
-        """Downsample target, clamped to [200, 2000]."""
+        """Downsample target, clamped to [20, 2000] and scaled by width."""
         w = self.size.width
         if w <= 0:
             return _BUDGET_FALLBACK
-        return min(max(w * 2, 200), _BUDGET_CAP)
+        return max(min(w * 2, _BUDGET_CAP), 20)
 
     # render cache & worker dispatch
 

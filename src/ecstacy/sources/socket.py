@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncGenerator, Callable
 from typing import Any
 
 import orjson
@@ -65,7 +65,7 @@ class SocketSource(StreamableSource):
         self,
         keep_raw: bool = False,
         on_status: Callable[[str], None] | None = None,
-    ) -> AsyncIterator[DataSet]:
+    ) -> AsyncGenerator[DataSet, None]:
         import websockets
 
         attempts = 0
