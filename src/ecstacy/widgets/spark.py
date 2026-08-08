@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+import numpy as np
+
 from ecstacy.core import registry
 from ecstacy.widgets.base import ColumnMapping, PlotWidget, numeric
-from ecstacy.widgets.charts._helpers import _hex_rgb
+from ecstacy.widgets.charts._helpers import _hex_rgb, _lttb
 
 _MAX_POINTS = 500
 
@@ -13,6 +15,7 @@ _MAX_POINTS = 500
 class _SparkPayload:
     values: list[float] = field(default_factory=list)
     title: str = ""
+    note: str | None = None
 
 
 @registry.viz.register("sparkline")
@@ -23,14 +26,27 @@ class SparklineView(PlotWidget):
         column = mapping.value or (mapping.y[0] if mapping.y else None)
         if not column or column not in frame.columns:
             return _SparkPayload(title="no numeric column to sparkline")
-        # Truncate BEFORE coercion/dropna so they run on ≤_MAX_POINTS rows.
-        series = frame[column]
-        if len(series) > _MAX_POINTS:
-            series = series.iloc[-_MAX_POINTS:]
-        values = numeric(series).dropna().tolist()
-        if not values:
+        series = numeric(frame[column]).dropna()
+        if series.empty:
             return _SparkPayload(title=f"no data for {column}")
-        return _SparkPayload(values=values, title=f"{column} · last {len(values)}")
+        # Downsample via LTTB (preserves shape) instead of truncating to the
+        # last _MAX_POINTS, so earlier data isn't discarded. Matches the line
+        # chart's fidelity strategy.
+        downsampled = False
+        if len(series) > _MAX_POINTS:
+            idx = np.arange(len(series))
+            _, ys = _lttb(idx, series.to_numpy(dtype=float), _MAX_POINTS)
+            values = ys.tolist()
+            downsampled = True
+        else:
+            values = series.tolist()
+        if downsampled:
+            title = f"{column} · {len(values):,} of {len(series):,}"
+            note = f"↓ {len(series):,} → {len(values):,} points"
+        else:
+            title = f"{column} · last {len(values)}"
+            note = None
+        return _SparkPayload(values=values, title=title, note=note)
 
     def _paint(self, plt, payload: _SparkPayload, theme) -> None:
         if not payload.values:

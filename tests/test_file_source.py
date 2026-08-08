@@ -354,7 +354,7 @@ def test_file_source_keep_raw_true_for_json(sample_json):
 
 
 def test_file_source_duckdb_json_envelope(tmp_path):
-    """DuckDB read_json_auto handles {\"data\": [...]} envelopes."""
+    """DuckDB read_json_auto handles {"data": [...]} envelopes."""
     import orjson
 
     path = tmp_path / "envelope.json"
@@ -363,3 +363,31 @@ def test_file_source_duckdb_json_envelope(tmp_path):
     dataset = create_source(spec).fetch()
     assert dataset.meta.rows == 2
     assert "a" in dataset.frame.columns
+
+
+def test_file_source_json_envelope_keep_raw_single_read(tmp_path, monkeypatch):
+    """Envelope + keep_raw must retain raw without re-reading the file: the
+    payload from _unnest_json_envelope is reused (one read, not two)."""
+    from pathlib import Path
+
+    import orjson
+
+    path = tmp_path / "envelope.json"
+    payload_bytes = orjson.dumps({"data": [{"a": 1}, {"a": 2}]})
+    path.write_bytes(payload_bytes)
+
+    # Path instances have read-only attributes, so patch at the class level.
+    reads = 0
+    real_read_bytes = Path.read_bytes
+
+    def counting_read_bytes(self):
+        nonlocal reads
+        reads += 1
+        return real_read_bytes(self)
+
+    monkeypatch.setattr(Path, "read_bytes", counting_read_bytes)
+    spec = SourceSpec(kind="file", id="env", params={"path": str(path)})
+    dataset = create_source(spec).fetch(keep_raw=True)
+    assert dataset.meta.rows == 2
+    assert dataset.meta.raw == {"data": [{"a": 1}, {"a": 2}]}
+    assert reads == 1

@@ -58,6 +58,18 @@ class FileSource(Source):
         self.sheet = int(sheet) if isinstance(sheet, str) and sheet.isdigit() else sheet
         # Re-parse only known date columns on refresh.
         self._date_columns: list[str] | None = None
+        # Reuse one in-memory DuckDB connection across refreshes
+        self._duckdb_conn: duckdb.DuckDBPyConnection | None = None
+
+    def close(self) -> None:
+        if self._duckdb_conn is not None:
+            self._duckdb_conn.close()
+            self._duckdb_conn = None
+
+    def _duckdb_conn_get(self) -> duckdb.DuckDBPyConnection:
+        if self._duckdb_conn is None:
+            self._duckdb_conn = duckdb.connect()
+        return self._duckdb_conn
 
     def describe(self) -> str:
         return "file:<stdin>" if self.is_stdin else f"file:{self.path.name}"
@@ -86,7 +98,10 @@ class FileSource(Source):
         raw: Any = None
         try:
             if self.fmt in _DUCKDB_FORMATS:
-                frame, raw = _read_duckdb(self.path, self.fmt, self.max_rows, keep_raw)
+                frame, raw = _read_duckdb(
+                    self.path, self.fmt, self.max_rows, keep_raw,
+                    conn=self._duckdb_conn_get(),
+                )
             elif self.fmt == "duckdb":
                 frame = _read_duckdb_database(self.path, self.max_rows, self.id)
             elif self.fmt == "excel":
@@ -156,9 +171,17 @@ class FileSource(Source):
 
 
 def _read_duckdb(
-    path: Path, fmt: str, max_rows: int | None, keep_raw: bool = False
+    path: Path,
+    fmt: str,
+    max_rows: int | None,
+    keep_raw: bool = False,
+    conn: duckdb.DuckDBPyConnection | None = None,
 ) -> tuple[pd.DataFrame, Any]:
-    """Read a file via DuckDB's native parsers. Returns (frame, raw_json_or_None)."""
+    """Read a file via DuckDB's native parsers. Returns (frame, raw_json_or_None).
+
+    When ``conn`` is supplied it is reused (not closed) so callers that fetch
+    repeatedly (auto-refresh) avoid per-call connection setup.
+    """
     limit = f" LIMIT {max_rows}" if max_rows is not None else ""
     path_str = str(path.resolve()).replace("'", "''")
     if fmt == "csv":
@@ -173,20 +196,28 @@ def _read_duckdb(
         query = f"SELECT * FROM read_json_auto('{path_str}', format='newline_delimited'){limit}"
     else:
         raise ValueError(f"unsupported DuckDB format: {fmt}")
-    conn = duckdb.connect()
+    owns: bool
+    if conn is None:
+        conn = duckdb.connect()
+        owns = True
+    else:
+        owns = False
     try:
         frame = conn.sql(query).df()
     finally:
-        conn.close()
+        if owns:
+            conn.close()
     # DuckDB emits a dummy column0 for zero-byte files; surface as EmptyDataError.
     if frame.empty and list(frame.columns) == ["column0"]:
         raise pd.errors.EmptyDataError(str(path))
     # Unnest JSON envelope frames (e.g. {"data": [...]}) to flat records.
+    # Reuse the payload from _unnest_json_envelope when keep_raw is wanted so
+    # the file is read and parsed once, not twice.
     raw: Any = None
     if fmt == "json":
         if _looks_like_envelope(frame):
-            frame = _unnest_json_envelope(path, max_rows)
-        if keep_raw:
+            frame, raw = _unnest_json_envelope(path, max_rows)
+        elif keep_raw:
             raw = orjson.loads(path.read_bytes())
     return frame, raw
 
@@ -229,9 +260,15 @@ def _looks_like_envelope(frame: pd.DataFrame) -> bool:
     )
 
 
-def _unnest_json_envelope(path: Path, max_rows: int | None) -> pd.DataFrame:
+def _unnest_json_envelope(
+    path: Path, max_rows: int | None
+) -> tuple[pd.DataFrame, Any]:
     """Unnest a JSON envelope (e.g. {"data": [...]}) by picking the first
-    list-valued top-level field, expanding each element into a row."""
+    list-valued top-level field, expanding each element into a row.
+
+    Returns ``(frame, raw)`` so callers needing the raw payload (keep_raw)
+    can reuse it instead of re-reading and re-parsing the file.
+    """
     raw = orjson.loads(path.read_bytes())
     records = raw
     if isinstance(raw, dict):
@@ -239,7 +276,7 @@ def _unnest_json_envelope(path: Path, max_rows: int | None) -> pd.DataFrame:
     frame = pd.json_normalize(records)
     if max_rows is not None:
         frame = frame.head(max_rows)
-    return frame
+    return frame, raw
 
 
 def _read_log(path: Path, max_rows: int | None = None) -> pd.DataFrame:

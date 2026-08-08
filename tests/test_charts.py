@@ -139,6 +139,34 @@ async def test_line_chart_caps_points_for_large_frame():
     # no crash == pass
 
 
+def test_sparkline_downsamples_via_lttb_above_threshold():
+    """Above _MAX_POINTS the sparkline downsamples via LTTB (preserving shape)
+    instead of truncating to the last _MAX_POINTS, and surfaces a note."""
+    from ecstacy.widgets.base import ColumnMapping
+    from ecstacy.widgets.spark import _MAX_POINTS, SparklineView
+
+    n = _MAX_POINTS * 4
+    df = pd.DataFrame({"value": list(range(n))})
+    payload = SparklineView()._prepare(df, ColumnMapping(value="value"), 100)
+    assert len(payload.values) == _MAX_POINTS
+    assert payload.note is not None and "↓" in payload.note
+    # First and last points are preserved by LTTB (endpoints are kept).
+    assert payload.values[0] == 0
+    assert payload.values[-1] == n - 1
+
+
+def test_sparkline_below_threshold_keeps_all_and_no_note():
+    """Below _MAX_POINTS no downsampling happens and no note is set."""
+    from ecstacy.widgets.base import ColumnMapping
+    from ecstacy.widgets.spark import SparklineView
+
+    df = pd.DataFrame({"value": list(range(50))})
+    payload = SparklineView()._prepare(df, ColumnMapping(value="value"), 100)
+    assert len(payload.values) == 50
+    assert payload.note is None
+    assert payload.title == "value · last 50"
+
+
 def test_max_chart_points_constant():
     assert charts.MAX_CHART_POINTS == 1000
 
