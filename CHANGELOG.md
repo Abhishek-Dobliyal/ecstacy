@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.1] - 2026-08-08
+
+### Fixed
+- `_diet_dtypes` no longer mutates the caller's DataFrame in place; it copies before downcasting, so refresh cycles don't corrupt frames a source may cache and re-fetch.
+- `recents` list is now capped at 20 entries, preventing unbounded growth over a long session.
+- Headless `_emit_json` / `_emit_markdown` now write through the passed file handle instead of ignoring it (consistency with `_emit_csv`).
+- `consume_stream` buffers the latest batch seen while the owning screen is inactive (e.g. a modal is open) and flushes it on resume, so streaming dashboards no longer silently lose data during brief UI interactions.
+
+### Changed
+- Sparkline downsamples via LTTB (preserving shape) instead of truncating to the last 500 points, so earlier data isn't discarded; surfaces a `↓ N → M points` note like the line chart.
+- JSON envelope reads (`{"data": [...]}`) with `keep_raw` now reuse the already-parsed payload, reading and parsing the file once instead of twice.
+- `FileSource` caches one in-memory DuckDB connection across refreshes and closes it via a new `close()` method, avoiding per-call connect/close overhead on auto-refresh.
+
+### Added
+- Structured logging via `ecstacy.util.logging` (`get_logger` / `configure_logging`). The library stays silent by default (NullHandler); set `ECSTACY_LOG_LEVEL=DEBUG` to inspect refresh/stream lifecycle and failure details. Silent `pass` blocks at shutdown guards and error-toast-only sites now log at debug/warning.
+
 ## [0.14.0] - 2026-08-03
 
 ### Added
