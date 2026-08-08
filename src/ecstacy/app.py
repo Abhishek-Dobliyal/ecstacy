@@ -15,6 +15,7 @@ from ecstacy.screens.modals import ThemePickerScreen
 from ecstacy.screens.splash import SplashScreen
 from ecstacy.sources.base import Source, SourceError, SourceSpec, create_source
 from ecstacy.theming import register_themes, theme_entries
+from ecstacy.util.logging import get_logger
 from ecstacy.util.timeparse import parse_duration
 from ecstacy.widgets import resolve_viz
 from ecstacy.widgets.base import ColumnMapping
@@ -22,6 +23,7 @@ from ecstacy.widgets.base import ColumnMapping
 _CSS_PATH = str(Path(__file__).parent / "theming" / "ecstacy.tcss")
 _PROGRESSIVE_BATCH = 1000
 _MAX_RECENTS = 20
+_log = get_logger("ecstacy.app")
 
 
 class EcstacyApp(App):
@@ -146,6 +148,7 @@ class EcstacyApp(App):
             )
             return
         except Exception as error:
+            _log.warning("failed to load %s: %s", spec.id, error)
             self._deliver(self._open_failed, key, f"failed to load: {error}")
             return
         self._deliver(self._show_dataset, key, spec, source, dataset, viz, mapping)
@@ -155,6 +158,7 @@ class EcstacyApp(App):
             try:
                 full_dataset = source.fetch(keep_raw=keep_raw)
             except Exception as error:
+                _log.warning("progressive full load failed for %s: %s", spec.id, error)
                 self._deliver(
                     self._progressive_failed, key, spec, str(error),
                 )
@@ -167,7 +171,7 @@ class EcstacyApp(App):
         try:
             self.call_from_thread(callback, *args)
         except RuntimeError:
-            pass  # app is shutting down
+            _log.debug("deliver skipped, app shutting down")
 
     def _open_failed(self, key: tuple[str, str], message: str) -> None:
         self._inflight_opens.pop(key, None)

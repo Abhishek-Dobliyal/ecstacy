@@ -6,10 +6,13 @@ from typing import TYPE_CHECKING
 
 from ecstacy.core.dataset import DataSet
 from ecstacy.sources.base import Source
+from ecstacy.util.logging import get_logger
 
 if TYPE_CHECKING:
     from textual.timer import Timer
     from textual.worker import Worker
+
+_log = get_logger("ecstacy.scheduler")
 
 
 @dataclass
@@ -62,6 +65,7 @@ class Scheduler:
         try:
             dataset = job.source.fetch(keep_raw=job.keep_raw, force=force)
         except Exception as error:  # surfaced to the UI, never crashes the loop
+            _log.warning("scheduler fetch failed for %s: %s", job.source.id, error)
             self._deliver(job.on_error, error)
         else:
             self._deliver(job.on_data, dataset)
@@ -73,7 +77,7 @@ class Scheduler:
             self._app.call_from_thread(callback, payload)
         except RuntimeError:
             # app is shutting down; drop the result
-            pass
+            _log.debug("scheduler deliver dropped, app shutting down")
 
     def stop(self) -> None:
         self._stopped = True

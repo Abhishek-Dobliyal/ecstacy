@@ -25,6 +25,7 @@ from ecstacy.config.loader import (
 from ecstacy.config.schema import ConfigError, DashboardConfig
 from ecstacy.sources.base import SourceSpec
 from ecstacy.theming import theme_names
+from ecstacy.util.logging import configure_logging
 from ecstacy.widgets import viz_names
 from ecstacy.widgets.base import ColumnMapping
 
@@ -292,6 +293,7 @@ def config_path() -> None:
 
 
 def main() -> None:
+    configure_logging()
     app()
 
 

@@ -15,11 +15,14 @@ from ecstacy.core.stream import close_source, consume_stream
 from ecstacy.core.transforms import TransformError, parse_transform_query
 from ecstacy.screens.modals import VIZ_NO_MAPPING, ChartMappingScreen, ExportScreen
 from ecstacy.sources.base import Source, SourceError, SourceSpec, StreamableSource, create_source
+from ecstacy.util.logging import get_logger
 from ecstacy.widgets import create_viz, resolve_viz, viz_names
 from ecstacy.widgets.base import ColumnMapping, auto_mapping
 
 if TYPE_CHECKING:
     from textual.worker import Worker
+
+_log = get_logger("ecstacy.chart")
 
 
 class ChartScreen(Screen):
@@ -199,7 +202,7 @@ class ChartScreen(Screen):
                 self.notify, message, severity="error" if error else "information"
             )
         except RuntimeError:
-            pass
+            _log.debug("chart notify dropped, app shutting down")
 
     def action_escape(self) -> None:
         """Exit search/query input first; pop screen when no input is focused."""
@@ -365,6 +368,7 @@ class ChartScreen(Screen):
                 self.notify(f"query error: {error.message}", severity="warning")
                 result = self.dataset
             except Exception as error:
+                _log.warning("transform query failed: %s", error)
                 self.notify(f"query error: {error}", severity="warning")
                 result = self.dataset
             else:

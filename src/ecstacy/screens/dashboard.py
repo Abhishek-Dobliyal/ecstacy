@@ -16,12 +16,15 @@ from ecstacy.core.scheduler import Job, Scheduler
 from ecstacy.core.stream import close_source, consume_stream
 from ecstacy.core.transforms import Transform, TransformError
 from ecstacy.sources.base import Source, SourceError, SourceSpec, StreamableSource, create_source
+from ecstacy.util.logging import get_logger
 from ecstacy.util.timeparse import parse_duration
 from ecstacy.widgets import create_viz, resolve_viz
 from ecstacy.widgets.base import ColumnMapping
 
 if TYPE_CHECKING:
     from textual.worker import Worker
+
+_log = get_logger("ecstacy.dashboard")
 
 
 def _mapping_from_panel(panel: PanelConfig) -> ColumnMapping:
@@ -153,6 +156,7 @@ class DashboardScreen(Screen):
             try:
                 source = create_source(enriched)
             except SourceError as error:
+                _log.warning("failed to create source %s: %s", spec.id, error)
                 self.notify(
                     f"failed to create source {spec.id}: {error.message}",
                     severity="error",

@@ -4,6 +4,9 @@ from collections.abc import Callable
 
 from ecstacy.core.dataset import DataSet
 from ecstacy.sources.base import StreamableSource
+from ecstacy.util.logging import get_logger
+
+_log = get_logger("ecstacy.stream")
 
 
 def close_source(source: object) -> None:
@@ -49,6 +52,7 @@ async def consume_stream(
                 pending = None
             on_data(dataset)
     except Exception as error:
+        _log.warning("stream error: %s", error)
         on_error(error)
     finally:
         await stream.aclose()
