@@ -12,11 +12,11 @@ def _emit_csv(frame, f) -> None:
 
 
 def _emit_json(frame, f) -> None:
-    typer.echo(frame.to_json(orient="records", indent=2, date_format="iso"))
+    f.write(frame.to_json(orient="records", indent=2, date_format="iso"))
 
 
 def _emit_markdown(frame, f) -> None:
-    typer.echo(frame.to_markdown(index=False))
+    f.write(frame.to_markdown(index=False))
 
 
 _EXPORT_DISPATCH = {

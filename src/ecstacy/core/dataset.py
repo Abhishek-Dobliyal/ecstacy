@@ -146,6 +146,9 @@ def _diet_dtypes(frame: pd.DataFrame) -> pd.DataFrame:
                 changed = True
     if not changed:
         return frame
+    # Copy so the caller's frame (which sources may cache and re-fetch) is
+    # not mutated in place — refresh cycles otherwise corrupt cached frames.
+    frame = frame.copy()
     for name, series in new_cols.items():
         frame[name] = series
     return frame

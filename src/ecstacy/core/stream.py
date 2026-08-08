@@ -36,9 +36,17 @@ async def consume_stream(
 
     stream = source.stream(keep_raw=keep_raw, on_status=_on_status)
     try:
+        # Hold the latest batch seen while the screen is inactive (e.g. a
+        # modal is open) and flush it on resume so streaming dashboards don't
+        # silently lose data during brief UI interactions.
+        pending: DataSet | None = None
         async for dataset in stream:
             if not is_active():
+                pending = dataset
                 continue
+            if pending is not None:
+                on_data(pending)
+                pending = None
             on_data(dataset)
     except Exception as error:
         on_error(error)

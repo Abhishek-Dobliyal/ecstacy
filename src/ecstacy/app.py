@@ -21,6 +21,7 @@ from ecstacy.widgets.base import ColumnMapping
 
 _CSS_PATH = str(Path(__file__).parent / "theming" / "ecstacy.tcss")
 _PROGRESSIVE_BATCH = 1000
+_MAX_RECENTS = 20
 
 
 class EcstacyApp(App):
@@ -219,6 +220,8 @@ class EcstacyApp(App):
 
     def _remember(self, label: str, spec: SourceSpec) -> None:
         self.recents = [(label, spec)] + [r for r in self.recents if r[0] != label]
+        # Cap so a long session doesn't accumulate unbounded recents.
+        del self.recents[_MAX_RECENTS:]
 
 
 def spec_from_target(text: str) -> SourceSpec:

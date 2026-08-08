@@ -57,6 +57,14 @@ def test_diet_disabled_preserves_original_dtypes():
     assert dataset.frame["a"].dtype == np.int64
 
 
+def test_diet_does_not_mutate_caller_frame():
+    """Downcasting must not alter the frame the caller still holds sources
+    may cache and re-fetch the same frame object across refresh cycles."""
+    frame = pd.DataFrame({"a": np.array([1, 2, 3], dtype="int64")})
+    DataSet.from_dataframe(frame, source_id="s", kind="test")
+    assert frame["a"].dtype == np.int64
+
+
 def test_diet_preserves_role_classification():
     frame = pd.DataFrame(
         {
